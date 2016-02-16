@@ -631,7 +631,7 @@ private WTableDirEditor wtOrg;
 			registrar();	
 			
 		}else if (event.getTarget().equals(buttonImpresion)){
-			imprimir(1000001);
+//			imprimir(1000001);
 		}
 	}
 	
@@ -690,7 +690,6 @@ private WTableDirEditor wtOrg;
 
 	@Override
 	public void tableChanged(WTableModelEvent event) {
-		System.out.println(event);
 		
 	}
 	
