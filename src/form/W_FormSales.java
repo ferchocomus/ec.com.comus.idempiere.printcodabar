@@ -7,10 +7,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Vector;
 import java.util.logging.Level;
@@ -23,7 +26,10 @@ import org.adempiere.webui.component.Button;
 import org.adempiere.webui.component.Combobox;
 import org.adempiere.webui.component.Grid;
 import org.adempiere.webui.component.Label;
+import org.adempiere.webui.component.ListCell;
+import org.adempiere.webui.component.ListItem;
 import org.adempiere.webui.component.ListModelTable;
+import org.adempiere.webui.component.Listbox;
 import org.adempiere.webui.component.ListboxFactory;
 import org.adempiere.webui.component.Row;
 import org.adempiere.webui.component.Rows;
@@ -63,9 +69,18 @@ import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zul.Borderlayout;
 import org.zkoss.zul.Center;
+import org.zkoss.zul.Decimalbox;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.East;
+import org.zkoss.zul.ListModel;
+import org.zkoss.zul.ListModelList;
+import org.zkoss.zul.Listcell;
+import org.zkoss.zul.Listhead;
+import org.zkoss.zul.Listheader;
+import org.zkoss.zul.Listitem;
+import org.zkoss.zul.ListitemRendererExt;
 import org.zkoss.zul.North;
+import org.zkoss.zul.Popup;
 import org.zkoss.zul.Space;
 import org.zkoss.zul.Textbox;
 
@@ -76,7 +91,7 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 {
 
 	private CustomForm form = new CustomForm();
-	private WListbox variedadTable;
+	private Listbox variedadTable;
 	private Button button0;
 	private Button button1;
 	private Button button2;
@@ -136,14 +151,12 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 	private WStringEditor wsMesas;
 	private WStringEditor wsEtiquetas;
 	private String number ="";
-//	private Textbox stringEditor = new Textbox();
 	private int idLocator;
 	private Date date;
 	private PO variedadSelected;
 	private int m_M_AttributeSet_ID;
-//	private Combobox listEditor;
 	private String fieldFocus;
-private WTableDirEditor wtOrg;
+	private WTableDirEditor wtOrg;
 
 	public W_FormSales(){
 		try {
@@ -483,8 +496,8 @@ private WTableDirEditor wtOrg;
 		layoutEast.appendChild(centerEast);
 		
 		
-			 variedadTable = ListboxFactory.newDataTable();
-			 variedadTable.repaint();
+			 variedadTable = new Listbox();
+//			 variedadTable.repaint();
 			 centerEast.appendChild(variedadTable);
 		
 			 
@@ -544,7 +557,7 @@ private WTableDirEditor wtOrg;
 				buttonJu.addEventListener(Events.ON_CLICK, this);
 				buttonVi.addEventListener(Events.ON_CLICK, this);
 				buttonSa.addEventListener(Events.ON_CLICK, this);
-				variedadTable.addEventListener(Events.ON_CLICK, this);
+//				variedadTable.addEventListener(Events.ON_CLICK, this);
 				wlTipoBunch.addValueChangeListener(this);
 				
 				wsMesas.getComponent().addEventListener(Events.ON_FOCUS, this);
@@ -557,9 +570,17 @@ private WTableDirEditor wtOrg;
 		
 	}
 
-
 	@Override
 	public void onEvent(Event event) throws Exception {
+		if (event.getTarget() instanceof Button){
+		 Button button = (Button)event.getTarget();
+		 Boolean isVariedadTable = button.getAttribute("isVariedadTable") == null?false:Boolean.parseBoolean(button.getAttribute("isVariedadTable").toString());
+			if(isVariedadTable){
+				String nameVariedad =button.getLabel();
+				 wsVariedad.setValue(nameVariedad);
+				 variedadSelected = new Query(Env.getCtx(), MProduct.Table_Name, "name = ?",null).setParameters(nameVariedad).first();
+			}
+		}
 		if(event.getName().equals(Events.ON_FOCUS)){
 			if (event.getTarget().equals(wsMesas.getComponent()))
 				fieldFocus = "wsMesas";
@@ -579,13 +600,13 @@ private WTableDirEditor wtOrg;
 		 Button button = (Button) event.getTarget();
 		 searchVariedad(button.getLabel());
 		
-		}else if (event.getTarget().equals(variedadTable)){
-			 WListbox listBox = (WListbox) event.getTarget();
-			 if (listBox.getSelectedItem()!=null){
-				 String nameVariedad = listBox.getSelectedItem().getLabel();
-				 wsVariedad.setValue(nameVariedad);
-				 variedadSelected = new Query(Env.getCtx(), MProduct.Table_Name, "name = ?",null).setParameters(nameVariedad).first();
-			 }
+//		}else if (event.getTarget().equals(variedadTable)){
+//			 Listbox listBox = (Listbox) event.getTarget();
+//			 if (listBox.getSelectedItem()!=null){
+//				 String nameVariedad = listBox.getSelectedItem().getLabel();
+//				 wsVariedad.setValue(nameVariedad);
+//				 variedadSelected = new Query(Env.getCtx(), MProduct.Table_Name, "name = ?",null).setParameters(nameVariedad).first();
+//			 }
 			
 		}else if(event.getTarget().equals(buttonDo) || event.getTarget().equals(buttonLu) || event.getTarget().equals(buttonMa) || event.getTarget().equals(buttonMi)
 				|| event.getTarget().equals(buttonJu) || event.getTarget().equals(buttonVi) || event.getTarget().equals(buttonSa)){
@@ -611,10 +632,10 @@ private WTableDirEditor wtOrg;
 			 Button button = (Button) event.getTarget();
 			 String numberButton = button.getLabel();
 
-			 if (fieldFocus.equals("wsMesas")){
+			 if (fieldFocus!=null && fieldFocus.equals("wsMesas")){
 				 number = wsMesas.getDisplay() + numberButton;
 			 	 wsMesas.getComponent().setText(number);
-			 } else if (fieldFocus.equals("wsEtiquetas")){
+			 } else if (fieldFocus!=null &&  fieldFocus.equals("wsEtiquetas")){
 				 number = wsEtiquetas.getDisplay() + numberButton;
 				 wsEtiquetas.getComponent().setText(number);
 			 }			 
@@ -665,23 +686,51 @@ private WTableDirEditor wtOrg;
 	public void searchVariedad(String letter){
 		String whereLongitud  = wtLongitud.getDisplay()==null?"":" and classification like  '%"+wtLongitud.getDisplay().trim()+"%'";
 		List<MProduct> product = new Query(Env.getCtx(), MProduct.Table_Name, "name like '"+letter+"%' "+whereLongitud, null).setOrderBy("name").list();
-        Vector<Vector<Object>> linesDataVariedadTable = new Vector<Vector<Object>>();
-        variedadTable.clearTable();
-        
+//        Vector<Vector<Object>> linesDataVariedadTable = new Vector<Vector<Object>>();
+		variedadTable.getItems().clear();
+ 
+//        
         for (int i = 0; i < product.size(); i++) {
-           	Vector<Object> line = new Vector<Object>();
-           	linesDataVariedadTable.add(line);
-           	line.add(product.get(i).getName());	
+//           	Vector<Object> line = new Vector<Object>();
+//           	linesDataVariedadTable.add(line);
+//           	line.add(product.get(i).getName());	
+    		Listitem lt = new Listitem(); 
+    		Listcell a = new Listcell();
+    		Button button = new Button(product.get(i).getName());
+    		button.setHeight("40px");
+    		button.setWidth("100%");
+    		button.setAttribute("isVariedadTable", true);
+    		button.addActionListener(this);
+    		a.appendChild(button);
+    		lt.appendChild(a); 
+    		variedadTable.appendChild(lt);
+    		variedadTable.setVflex("150");
+    		variedadTable.renderAll();
 		}
-
-       	
-	    ListModelTable variedadTableModelToProcess = new ListModelTable(linesDataVariedadTable);
-		variedadTableModelToProcess.addTableModelListener(this);
-		variedadTable.setModel(variedadTableModelToProcess);
-		variedadTable.setHflex("100");
-		variedadTable.repaint();
+//
+//       	
+//	    ListModelTable variedadTableModelToProcess = new ListModelTable(linesDataVariedadTable);
+//		variedadTableModelToProcess.addTableModelListener(this);
+//		variedadTable.setModel(variedadTableModelToProcess);
+//		variedadTable.setHflex("100");
+//		variedadTable.repaint();
+		
+//		<listbox nonselectableTags="button, input">
+//	    <listitem><listcell><textbox/></listcell></listitem>
+//	    <listitem><listcell><button label="button"/></listcell></listitem>
+//	    <listitem><listcell><h:input xmlns:h="native"/></listcell></listitem>
+//	    <listitem><listcell><datebox/></listcell></listitem>
+//	</listbox>
+		
+		
 	
 	}
+
+		
+//		public void refreshUI(){
+//		variedadTable.appendItem("hoal","u0");
+	
+//	}
 
 	@Override
 	public ADForm getForm() {
