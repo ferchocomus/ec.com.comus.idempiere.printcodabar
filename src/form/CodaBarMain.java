@@ -31,12 +31,10 @@ import org.adempiere.webui.editor.WStringEditor;
 import org.adempiere.webui.editor.WTableDirEditor;
 import org.adempiere.webui.event.ValueChangeEvent;
 import org.adempiere.webui.event.ValueChangeListener;
-import org.adempiere.webui.event.WTableModelEvent;
-import org.adempiere.webui.event.WTableModelListener;
 import org.adempiere.webui.panel.ADForm;
 import org.adempiere.webui.panel.CustomForm;
-import org.adempiere.webui.panel.IFormController;
 import org.adempiere.webui.window.FDialog;
+import org.compiere.model.I_M_Warehouse;
 import org.compiere.model.MAttributeSetInstance;
 import org.compiere.model.MInventory;
 import org.compiere.model.MInventoryLine;
@@ -56,7 +54,6 @@ import org.compiere.print.ReportEngine;
 import org.compiere.util.DB;
 import org.compiere.util.DisplayType;
 import org.compiere.util.Env;
-import org.compiere.util.Trx;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
@@ -72,7 +69,7 @@ import org.zkoss.zul.Space;
 
 
 
-public class W_FormSales implements IFormController, EventListener<Event>, WTableModelListener ,ValueChangeListener
+public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 {
 
 	private CustomForm form = new CustomForm();
@@ -123,13 +120,11 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 	private Button buttonBQTS;
 	private WStringEditor wsVariedad;
 	private WTableDirEditor wlTipoBunch;
-//	private WTableDirEditor wtLongitud;
 	private WTableDirEditor wtTallos;
 	private WStringEditor wsMesas;
 	private WStringEditor wsEtiquetas;
 	private String number ="";
 	private int idLocator;
-//	private Date date;
 	private MProduct variedadSelected;
 	private int m_M_AttributeSet_ID;
 	private String fieldFocus;
@@ -143,23 +138,9 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 	private int m_C_DocTypeInputsProduction_ID;
 	private int m_C_CHARGE_ID;
 	private int m_C_DocTypeInputsProcessed_ID;
-	private int FLC_AD_PrintFormatBunch_ID;
-
-	public W_FormSales(){
-		try {
-			zkInit();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-        m_AD_Client_ID = Env.getAD_Client_ID(Env.getCtx());
-        m_M_AttributeSet_ID = MSysConfig.getIntValue("FLC_DateM_AttributeSet_ID", 0); 
-        m_C_DocTypeInputsProduction_ID = MSysConfig.getIntValue("FLC_InputsProductionC_DocType_ID", 0, m_AD_Client_ID);
-		m_C_CHARGE_ID = MSysConfig.getIntValue("FLC_InputsC_CHARGE_ID", 0, m_AD_Client_ID);
-		m_C_DocTypeInputsProcessed_ID = MSysConfig.getIntValue("FLC_InputsProceessedC_DocType_ID", 0, m_AD_Client_ID);;		
-		
-	};
-	
-	protected void zkInit() throws Exception {
+	private MWarehouse MWarehouse;
+	private Label lblTipoBunch;
+	protected void zkInit(String codaBarType) throws Exception {
 		
 
 		Borderlayout mainLayout = new Borderlayout();
@@ -167,7 +148,6 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		
 		// ***************************Center****************************//
 		Center mainPanelCenter = new Center();
-//		mainPanelCenter.setWidth("60%");
 		mainLayout.appendChild(mainPanelCenter);
 		
 		Div divCenter = new Div();
@@ -208,10 +188,8 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		Rows rowsCenter2 = gridCenter2.newRows();
 		
 		Row rowCenter2 = rowsCenter2.newRow();
-		Label lblTipoBunch = new Label("Tipo de Bunch");
+	    lblTipoBunch = new Label();
 		lblTipoBunch.setStyle(styleLabel);
-//		Label lblLongitud = new Label("Longitud");	
-//		lblLongitud.setStyle(styleLabel);
 		Label lblTallos = new Label("Tallos");	
 		lblTallos.setStyle(styleLabel);
 		Label lblMesas = new Label("Mesa");
@@ -219,7 +197,6 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		Label lblEtiquetas = new Label("Etiquetas");
 		lblEtiquetas.setStyle(styleLabel);
 		rowCenter2.appendCellChild(lblTipoBunch,2);
-//		rowCenter2.appendChild(lblLongitud);
 		rowCenter2.appendChild(lblTallos);
 		rowCenter2.appendChild(lblMesas);
 		rowCenter2.appendChild(lblEtiquetas);
@@ -229,7 +206,7 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 
 		
 //		wlTipoBunch = new WLocatorEditor ("M_Locator_ID", true, false, true, locator, form.getWindowNo());
-		MLookup lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y')");
+		MLookup lookupLocator = getLookupLocator(codaBarType);			
 		wlTipoBunch = new WTableDirEditor("M_Locator_ID", true, false, true, lookupLocator);
 		wlTipoBunch.getComponent().setStyle(styleLabel);
 		
@@ -531,22 +508,31 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 				buttonImpresion.addEventListener(Events.ON_CLICK, this);
 				buttonReemb.addEventListener(Events.ON_CLICK, this);
 				buttonBQTS.addEventListener(Events.ON_CLICK, this);
-				
-//				calendar.setMold("default");
-//				calendar.addEventListener(CalendarsEvent.ON_DAY_CLICK, this);
-//				calendar.setId("calendarID");
-				
 				wlTipoBunch.addValueChangeListener(this);
 				
 				wsMesas.getComponent().addEventListener(Events.ON_FOCUS, this);
 				wsEtiquetas.getComponent().addEventListener(Events.ON_FOCUS, this);	
 		
 	}
-
+	private MLookup getLookupLocator(String codaBarType) throws Exception {
+		MLookup lookupLocator = null;	
+	  
+		if (codaBarType.equals(CodaBarType.NACIONAL)){
+			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters("NacionalSA").first();
+			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
+			 lblTipoBunch.setValue("Motivo Nacional");
+		}
+		return lookupLocator;
+	}
+	public void loadValueVariable(){
+        m_AD_Client_ID = Env.getAD_Client_ID(Env.getCtx());
+        m_M_AttributeSet_ID = MSysConfig.getIntValue("FLC_DateM_AttributeSet_ID", 0); 
+        m_C_DocTypeInputsProduction_ID = MSysConfig.getIntValue("FLC_InputsProductionC_DocType_ID", 0, m_AD_Client_ID);
+		m_C_CHARGE_ID = MSysConfig.getIntValue("FLC_InputsC_CHARGE_ID", 0, m_AD_Client_ID);
+		m_C_DocTypeInputsProcessed_ID = MSysConfig.getIntValue("FLC_InputsProceessedC_DocType_ID", 0, m_AD_Client_ID);
+	}
 	@Override
 	public void onEvent(Event event) throws Exception {
-		System.out.println(dateField);
-		System.out.println(new Date());
 		if (event.getTarget() instanceof Button){
 			Button button = (Button)event.getTarget();
 			Boolean isVariedadButton = button.getAttribute("isVariedadButton") == null?false:Boolean.parseBoolean(button.getAttribute("isVariedadButton").toString());
@@ -600,8 +586,6 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		}else if(event.getTarget().equals(buttonAceptar)){
 			registrar2();	
 			
-		}else if (event.getTarget().equals(buttonImpresion)){
-//			imprimir(1000001);
 		}else if(event.getTarget().equals(calendar)){
 			org.zkoss.zul.Calendar calendar = (org.zkoss.zul.Calendar)event.getTarget();
 			System.out.println(calendar.getValue());
@@ -682,15 +666,10 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		}
 	}
 
-	@Override
-	public ADForm getForm() {
+	public ADForm getADForm() {
 		return form;
 	}
 
-	@Override
-	public void tableChanged(WTableModelEvent event) {
-		
-	}
 	
 	public boolean validar(){
 		if (wtTallos.getDisplay()==null){
@@ -800,17 +779,7 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
    		imprimir(code.get_ID());
 	}//imprimir
 	
-	public void imprimir(int idFlcCodaBar){
-//
-//	  MQuery query = new MQuery("flc_codabar");
-//	  query.addRestriction("flc_codabar_id", MQuery.EQUAL, idFlcCodaBar);
-//	  MPrintFormat format = MPrintFormat.get (Env.getCtx(), 1000062, false);
-//	  PrintInfo info = new PrintInfo("Codabar",X_FLC_CodaBar.Table_ID,idFlcCodaBar);
-//	  ReportEngine re = new ReportEngine(Env.getCtx(), format, query, info);
-//	  re.setWindowNo(form.getWindowNo());
-//	  ReportCtl.preview(re);
-//	  
-	  
+	public void imprimir(int idFlcCodaBar){	  
 		MPrintFormat format = MPrintFormat.get (Env.getCtx(), 1000062, false);
 		MQuery query = new MQuery("flc_codabar");
     	query.addRestriction("flc_codabar_id", MQuery.EQUAL, idFlcCodaBar);
@@ -840,7 +809,7 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
             rs.close();
             pstmt.close();
         } catch (SQLException ex) {
-            Logger.getLogger(W_FormSales.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(CodaBarMain.class.getName()).log(Level.SEVERE, null, ex);
         }
         if(VLSValue>0)
         	return VLSValue;
@@ -882,13 +851,7 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 				int QtyBOx = 0;
 
 				if (idProducto>0){
-					MWarehouse MWarehouse = new MWarehouse(Env.getCtx(), MLocator.get_ID(), null);
 					MProduct MProduct = new MProduct(Env.getCtx(),idProducto,null);
-//				    int C_DocType_ID = 0 ;          	        
-//				    if(MWarehouse.get_Value("WarehouseCategory").toString().contains("CUL") || MWarehouse.get_Value("WarehouseCategory").toString().contains("NAC"))
-//						C_DocType_ID = m_C_DocTypeInputsProduction_ID;
-//					else if(MWarehouse.get_Value("WarehouseCategory").toString().contains("VEN"))
-//						C_DocType_ID = m_C_DocTypeInputsProcessed_ID;
 				    
 						
 					if(MWarehouse.getValue().substring(2, 3).compareTo("H")==0){
@@ -1016,7 +979,7 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
             rs.close();
             pstmt.close();
         } catch (SQLException ex) {
-            Logger.getLogger(W_FormSales.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(CodaBarMain.class.getName()).log(Level.SEVERE, null, ex);
         }
         return returnValue;
     }
