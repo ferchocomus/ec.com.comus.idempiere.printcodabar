@@ -6,34 +6,27 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
-import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.swing.JOptionPane;
 
 import model.MFlCodabar;
 import model.X_FLC_CodaBar;
 
 import org.adempiere.webui.component.Button;
-import org.adempiere.webui.component.Combobox;
 import org.adempiere.webui.component.Grid;
 import org.adempiere.webui.component.Label;
-import org.adempiere.webui.component.ListCell;
 import org.adempiere.webui.component.ListItem;
-import org.adempiere.webui.component.ListModelTable;
 import org.adempiere.webui.component.Listbox;
-import org.adempiere.webui.component.ListboxFactory;
 import org.adempiere.webui.component.Row;
 import org.adempiere.webui.component.Rows;
-import org.adempiere.webui.component.WListbox;
+import org.adempiere.webui.editor.WDateEditor;
 import org.adempiere.webui.editor.WStringEditor;
 import org.adempiere.webui.editor.WTableDirEditor;
 import org.adempiere.webui.event.ValueChangeEvent;
@@ -51,38 +44,30 @@ import org.compiere.model.MLocator;
 import org.compiere.model.MLookup;
 import org.compiere.model.MLookupFactory;
 import org.compiere.model.MProduct;
+import org.compiere.model.MProductCategory;
 import org.compiere.model.MQuery;
 import org.compiere.model.MSysConfig;
 import org.compiere.model.MWarehouse;
-import org.compiere.model.PO;
 import org.compiere.model.PrintInfo;
 import org.compiere.model.Query;
 import org.compiere.model.SystemIDs;
 import org.compiere.print.MPrintFormat;
-import org.compiere.print.ReportCtl;
 import org.compiere.print.ReportEngine;
 import org.compiere.util.DB;
 import org.compiere.util.DisplayType;
 import org.compiere.util.Env;
+import org.compiere.util.Trx;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zul.Borderlayout;
 import org.zkoss.zul.Center;
-import org.zkoss.zul.Decimalbox;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.East;
-import org.zkoss.zul.ListModel;
-import org.zkoss.zul.ListModelList;
 import org.zkoss.zul.Listcell;
-import org.zkoss.zul.Listhead;
-import org.zkoss.zul.Listheader;
-import org.zkoss.zul.Listitem;
-import org.zkoss.zul.ListitemRendererExt;
 import org.zkoss.zul.North;
-import org.zkoss.zul.Popup;
 import org.zkoss.zul.Space;
-import org.zkoss.zul.Textbox;
+
 
 
 
@@ -91,7 +76,7 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 {
 
 	private CustomForm form = new CustomForm();
-	private Listbox variedadTable;
+	private Listbox variedadTableParent;
 	private Button button0;
 	private Button button1;
 	private Button button2;
@@ -136,27 +121,29 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 	private Button buttonReemb;
 	private Button buttonImpresion;
 	private Button buttonBQTS;
-	private Button buttonDo;
-	private Button buttonLu;
-	private Button buttonMi;
-	private Button buttonMa;
-	private Button buttonJu;
-	private Button buttonVi;
-	private Button buttonSa;
 	private WStringEditor wsVariedad;
 	private WTableDirEditor wlTipoBunch;
-	private Label labelDayEast;
-	private WTableDirEditor wtLongitud;
+//	private WTableDirEditor wtLongitud;
 	private WTableDirEditor wtTallos;
 	private WStringEditor wsMesas;
 	private WStringEditor wsEtiquetas;
 	private String number ="";
 	private int idLocator;
-	private Date date;
-	private PO variedadSelected;
+//	private Date date;
+	private MProduct variedadSelected;
 	private int m_M_AttributeSet_ID;
 	private String fieldFocus;
 	private WTableDirEditor wtOrg;
+	private Listbox variedadTableChild;
+	private Label labelLongitud;
+	private org.zkoss.zul.Calendar calendar;
+	private WDateEditor dateField;
+	private int m_AD_Org_ID;
+	private int m_AD_Client_ID;
+	private int m_C_DocTypeInputsProduction_ID;
+	private int m_C_CHARGE_ID;
+	private int m_C_DocTypeInputsProcessed_ID;
+	private int FLC_AD_PrintFormatBunch_ID;
 
 	public W_FormSales(){
 		try {
@@ -164,7 +151,11 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+        m_AD_Client_ID = Env.getAD_Client_ID(Env.getCtx());
         m_M_AttributeSet_ID = MSysConfig.getIntValue("FLC_DateM_AttributeSet_ID", 0); 
+        m_C_DocTypeInputsProduction_ID = MSysConfig.getIntValue("FLC_InputsProductionC_DocType_ID", 0, m_AD_Client_ID);
+		m_C_CHARGE_ID = MSysConfig.getIntValue("FLC_InputsC_CHARGE_ID", 0, m_AD_Client_ID);
+		m_C_DocTypeInputsProcessed_ID = MSysConfig.getIntValue("FLC_InputsProceessedC_DocType_ID", 0, m_AD_Client_ID);;		
 		
 	};
 	
@@ -219,8 +210,8 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		Row rowCenter2 = rowsCenter2.newRow();
 		Label lblTipoBunch = new Label("Tipo de Bunch");
 		lblTipoBunch.setStyle(styleLabel);
-		Label lblLongitud = new Label("Longitud");	
-		lblLongitud.setStyle(styleLabel);
+//		Label lblLongitud = new Label("Longitud");	
+//		lblLongitud.setStyle(styleLabel);
 		Label lblTallos = new Label("Tallos");	
 		lblTallos.setStyle(styleLabel);
 		Label lblMesas = new Label("Mesa");
@@ -228,7 +219,7 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		Label lblEtiquetas = new Label("Etiquetas");
 		lblEtiquetas.setStyle(styleLabel);
 		rowCenter2.appendCellChild(lblTipoBunch,2);
-		rowCenter2.appendChild(lblLongitud);
+//		rowCenter2.appendChild(lblLongitud);
 		rowCenter2.appendChild(lblTallos);
 		rowCenter2.appendChild(lblMesas);
 		rowCenter2.appendChild(lblEtiquetas);
@@ -241,11 +232,6 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		MLookup lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y')");
 		wlTipoBunch = new WTableDirEditor("M_Locator_ID", true, false, true, lookupLocator);
 		wlTipoBunch.getComponent().setStyle(styleLabel);
-		
-		MLookup lookupLongitud = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LIST, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "AD_Ref_List_ID", 0, false, "(AD_Reference_ID=1000014)");	
-		wtLongitud = new WTableDirEditor("AD_Ref_List_ID", true, false, true, lookupLongitud);
-		wtLongitud.getComponent().setWidth("70px");
-		wtLongitud.getComponent().setStyle(styleLabel);
 		
 		MLookup lookupTallos = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LIST, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "AD_Ref_List_ID", 0, false, "(AD_Reference_ID=1000017)");
 		wtTallos = new WTableDirEditor("AD_Ref_List_ID", true, false, true, lookupTallos);
@@ -264,7 +250,6 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 	    wsEtiquetas.getComponent().setStyle(styleLabel);
 	    wsEtiquetas.setMandatory(true);
 		rowCenter2.appendCellChild(wlTipoBunch.getComponent(),2);
-		rowCenter2.appendChild(wtLongitud.getComponent());
 		rowCenter2.appendChild(wtTallos.getComponent());
 		rowCenter2.appendChild(wsMesas.getComponent());
 		rowCenter2.appendChild(wsEtiquetas.getComponent());
@@ -456,50 +441,47 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		mainPanelEast.appendChild(layoutEast);
 		
 		North northEeast = new North();
-		layoutEast.appendChild(northEeast);
-		
-			Div divEast = new Div();
-			northEeast.appendChild(divEast);
+	    layoutEast.appendChild(northEeast);
+	    dateField = new WDateEditor();
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(Env.getContextAsDate(Env.getCtx(), "#Date"));
+		cal.set(Calendar.HOUR_OF_DAY, 0);
+		cal.set(Calendar.MINUTE, 0);
+		cal.set(Calendar.SECOND, 0);
+		cal.set(Calendar.MILLISECOND, 0);
+		dateField.setValue(new Timestamp(cal.getTimeInMillis()));
+//			calendar = new org.zkoss.zul.Calendar();
+//			calendar.setWidth("100%");
+
 			
-			Grid gridEast1 = new Grid();
-			divEast.appendChild(gridEast1);
-			Rows rowsEast1 = gridEast1.newRows();
-			Row rowEast1 = rowsEast1.newRow();
+
+			northEeast.appendChild(dateField.getComponent());
 			
-		    labelDayEast = new Label();
-		    setDay(-1);
-			labelDayEast.setStyle("font-size:22px;font-weight: bold");
-			rowEast1.appendChild(labelDayEast);
-			
-			Grid gridDays = new Grid();
-			divEast.appendChild(gridDays);
-			Rows rowsDays = gridDays.newRows();
-			
-			Row rowDays = rowsDays.newRow();
-			buttonDo = new Button("Do");
-			buttonLu = new Button("Lu");
-			buttonMa = new Button("Ma");
-			buttonMi = new Button("Mi");
-			buttonJu = new Button("Ju");
-			buttonVi = new Button("Vi");
-			buttonSa = new Button("Sa");
-		
-			rowDays.appendChild(buttonDo);
-			rowDays.appendChild(buttonLu);
-			rowDays.appendChild(buttonMa);
-			rowDays.appendChild(buttonMi);
-			rowDays.appendChild(buttonJu);
-			rowDays.appendChild(buttonVi);
-			rowDays.appendChild(buttonSa);
-			
-		Center centerEast = new Center();
-		layoutEast.appendChild(centerEast);
-		
-		
-			 variedadTable = new Listbox();
-//			 variedadTable.repaint();
-			 centerEast.appendChild(variedadTable);
-		
+			Center centerEast = new Center();
+			layoutEast.appendChild(centerEast);
+
+			variedadTableParent = new Listbox();
+			centerEast.appendChild(variedadTableParent);
+	  
+		   East eastEast = new East();
+		   layoutEast.appendChild(eastEast);
+		   eastEast.setWidth("25%");
+		   
+		      Borderlayout southEastLayout = new Borderlayout();
+		      eastEast.appendChild(southEastLayout);
+		      		North northsouthE = new North();
+		      		labelLongitud = new Label("Longitud");
+//		      		labelLongitud.set
+		      		labelLongitud.setStyle("font-size:11px;font-weight: bold");
+		      		northsouthE.appendChild(labelLongitud);
+		      		southEastLayout.appendChild(northsouthE);
+		      				
+		      		Center centerSouthC = new Center();
+		      		southEastLayout.appendChild(centerSouthC);		      		
+		 		    variedadTableChild = new Listbox();
+		      		centerSouthC.appendChild(variedadTableChild);
+//		           
+		   		
 			 
 			 ///////////////////AÑADIR EVENTOS////////////////
 
@@ -550,46 +532,41 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 				buttonReemb.addEventListener(Events.ON_CLICK, this);
 				buttonBQTS.addEventListener(Events.ON_CLICK, this);
 				
-				buttonDo.addEventListener(Events.ON_CLICK, this);
-				buttonLu.addEventListener(Events.ON_CLICK, this);
-				buttonMa.addEventListener(Events.ON_CLICK, this);
-				buttonMi.addEventListener(Events.ON_CLICK, this);
-				buttonJu.addEventListener(Events.ON_CLICK, this);
-				buttonVi.addEventListener(Events.ON_CLICK, this);
-				buttonSa.addEventListener(Events.ON_CLICK, this);
-//				variedadTable.addEventListener(Events.ON_CLICK, this);
+//				calendar.setMold("default");
+//				calendar.addEventListener(CalendarsEvent.ON_DAY_CLICK, this);
+//				calendar.setId("calendarID");
+				
 				wlTipoBunch.addValueChangeListener(this);
 				
 				wsMesas.getComponent().addEventListener(Events.ON_FOCUS, this);
-				wsEtiquetas.getComponent().addEventListener(Events.ON_FOCUS, this);
-				wtLongitud.getComponent().addEventListener(Events.ON_FOCUS, this);
-				wtLongitud.addValueChangeListener(this);
-				
-
-		
+				wsEtiquetas.getComponent().addEventListener(Events.ON_FOCUS, this);	
 		
 	}
 
 	@Override
 	public void onEvent(Event event) throws Exception {
+		System.out.println(dateField);
+		System.out.println(new Date());
 		if (event.getTarget() instanceof Button){
-		 Button button = (Button)event.getTarget();
-		 Boolean isVariedadTable = button.getAttribute("isVariedadTable") == null?false:Boolean.parseBoolean(button.getAttribute("isVariedadTable").toString());
-			if(isVariedadTable){
-				String nameVariedad =button.getLabel();
-				 wsVariedad.setValue(nameVariedad);
-				 variedadSelected = new Query(Env.getCtx(), MProduct.Table_Name, "name = ?",null).setParameters(nameVariedad).first();
+			Button button = (Button)event.getTarget();
+			Boolean isVariedadButton = button.getAttribute("isVariedadButton") == null?false:Boolean.parseBoolean(button.getAttribute("isVariedadButton").toString());
+			if (isVariedadButton){
+				 Boolean isParent = button.getAttribute("isParent") == null?false:Boolean.parseBoolean(button.getAttribute("isParent").toString());
+				 int M_Product_ID  =Integer.parseInt(button.getAttribute("M_Product_ID").toString());		
+				 if(isParent){
+					labelLongitud.setValue(button.getLabel() );
+					searchVariedadChild(M_Product_ID);
+				 }else{		
+					variedadSelected = new MProduct(Env.getCtx(), M_Product_ID, null);
+					wsVariedad.setValue(variedadSelected.getName());
+				}
 			}
 		}
 		if(event.getName().equals(Events.ON_FOCUS)){
 			if (event.getTarget().equals(wsMesas.getComponent()))
 				fieldFocus = "wsMesas";
 			else if (event.getTarget().equals(wsEtiquetas.getComponent()))
-				fieldFocus = "wsEtiquetas";
-			else if (event.getTarget().equals(wtLongitud.getComponent()))
-				fieldFocus = "wtLongitud";
-
-			
+				fieldFocus = "wsEtiquetas";		
 		}else if (event.getTarget().equals(buttonA) || event.getTarget().equals(buttonB) || event.getTarget().equals(buttonC) || event.getTarget().equals(buttonD) 
 		 || event.getTarget().equals(buttonD) || event.getTarget().equals(buttonE) || event.getTarget().equals(buttonF) || event.getTarget().equals(buttonG) 
 	     || event.getTarget().equals(buttonH) || event.getTarget().equals(buttonI) || event.getTarget().equals(buttonJ) || event.getTarget().equals(buttonK) || event.getTarget().equals(buttonL)
@@ -598,34 +575,8 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 	     || event.getTarget().equals(buttonU) || event.getTarget().equals(buttonV) || event.getTarget().equals(buttonW) || event.getTarget().equals(buttonX)
 	     || event.getTarget().equals(buttonY) || event.getTarget().equals(buttonZ)){
 		 Button button = (Button) event.getTarget();
-		 searchVariedad(button.getLabel());
-		
-//		}else if (event.getTarget().equals(variedadTable)){
-//			 Listbox listBox = (Listbox) event.getTarget();
-//			 if (listBox.getSelectedItem()!=null){
-//				 String nameVariedad = listBox.getSelectedItem().getLabel();
-//				 wsVariedad.setValue(nameVariedad);
-//				 variedadSelected = new Query(Env.getCtx(), MProduct.Table_Name, "name = ?",null).setParameters(nameVariedad).first();
-//			 }
+		 searchVariedadParent(button.getLabel());
 			
-		}else if(event.getTarget().equals(buttonDo) || event.getTarget().equals(buttonLu) || event.getTarget().equals(buttonMa) || event.getTarget().equals(buttonMi)
-				|| event.getTarget().equals(buttonJu) || event.getTarget().equals(buttonVi) || event.getTarget().equals(buttonSa)){
-			 Button button = (Button) event.getTarget();
-			 String day = button.getLabel();
-			 if (day.equals("Do"))
-				 setDay(1);
-			 else if (day.equals("Lu"))
-				 setDay(2);
-			 else if (day.equals("Ma"))
-				 setDay(3);
-			 else if (day.equals("Mi"))
-				 setDay(4);
-			 else if (day.equals("Ju"))
-				 setDay(5);
-			 else if (day.equals("Vi"))
-				 setDay(6);
-			 else if (day.equals("Sa"))
-				 setDay(7);	
 		}else if(event.getTarget().equals(button0) || event.getTarget().equals(button1) || event.getTarget().equals(button2) || event.getTarget().equals(button3) || event.getTarget().equals(button4)
 				 || event.getTarget().equals(button5) || event.getTarget().equals(button6) || event.getTarget().equals(button7)
 				 || event.getTarget().equals(button8) || event.getTarget().equals(button9)){
@@ -641,96 +592,95 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 			 }			 
 			 	
 		}else if(event.getTarget().equals(buttonBorrar)){
-			if (fieldFocus.equals("wtLongitud")){
-				wtLongitud.setValue("");
-			}else if(fieldFocus.equals("wsMesas") && !wsMesas.getComponent().getText().equals(""))
+			if(fieldFocus.equals("wsMesas") && !wsMesas.getComponent().getText().equals(""))
 					wsMesas.getComponent().setText(wsMesas.getComponent().getText().substring(0, wsMesas.getComponent().getText().length()-1));
 				else if(fieldFocus.equals("wsEtiquetas") && !wsEtiquetas.getComponent().getText().equals(""))
 					wsEtiquetas.getComponent().setText(wsEtiquetas.getComponent().getText().substring(0, wsEtiquetas.getComponent().getText().length()-1));
 			
 		}else if(event.getTarget().equals(buttonAceptar)){
-			registrar();	
+			registrar2();	
 			
 		}else if (event.getTarget().equals(buttonImpresion)){
 //			imprimir(1000001);
+		}else if(event.getTarget().equals(calendar)){
+			org.zkoss.zul.Calendar calendar = (org.zkoss.zul.Calendar)event.getTarget();
+			System.out.println(calendar.getValue());
 		}
 	}
 	
 
-	public void setDay(int daySelected){
-		
-		Calendar cal = Calendar.getInstance();
-		if (daySelected>0){
-			int dayOfWeek = cal.get(Calendar.DAY_OF_WEEK);
-			int sumDays = daySelected-dayOfWeek;
-			cal.set(cal.get(Calendar.YEAR), cal.get(Calendar.MONDAY), cal.get(Calendar.DATE)+sumDays);
-		}
-		date = cal.getTime();
-		SimpleDateFormat format = new SimpleDateFormat("dd-MM-yyyy");
-		String date1 = format.format(date); 
-
-		String[] strDays = new String[]{
-				"DOMINGO",
-				"LUNES",
-				"MARTES",
-				"MIERCOLES",
-				"JUEVES",
-				"VIERNES",
-				"SABADO"};
-
+	private void CreateProduct() {
+		 List<MProduct> products = new Query(Env.getCtx(), MProduct.Table_Name,"C_UOM_ID = ?",null).setParameters(1000000).list();
+		 
+		 for (MProduct mProduct : products) {
 			
-		String dia = strDays[cal.get(Calendar.DAY_OF_WEEK)-1];
-		labelDayEast.setValue(dia+" "+date1);
+			MProductCategory category = new MProductCategory(Env.getCtx(), mProduct.getM_Product_Category_ID(), null);
+			MProduct productSearch = new Query(Env.getCtx(),MProduct.Table_Name,"name=?",null).setParameters(category.getName()).first();
+			if(productSearch !=null)
+				 break;
+			MProduct productNew = new MProduct(Env.getCtx(), 0,null);
+			productNew.setName(category.getName());
+			productNew.setValue(category.getName());
+			productNew.setIsSummary(true);
+			productNew.setM_Product_Category_ID(category.get_ID());
+			productNew.setC_UOM_ID(1000000);
+			productNew.save();
+			
+			List<MProduct> productUpdate = new Query(Env.getCtx(), 
+			              MProduct.Table_Name,"M_Product_Category_ID = ?",null).setParameters(category.get_ID()).list();
+			for (MProduct mProductUpdate : productUpdate) {
+				mProductUpdate.set_ValueOfColumn("Parent_ID", productNew.get_ID());
+				mProductUpdate.save();
+			}
+			
+		 }
 	}
+
 	
-	public void searchVariedad(String letter){
-		String whereLongitud  = wtLongitud.getDisplay()==null?"":" and classification like  '%"+wtLongitud.getDisplay().trim()+"%'";
-		List<MProduct> product = new Query(Env.getCtx(), MProduct.Table_Name, "name like '"+letter+"%' "+whereLongitud, null).setOrderBy("name").list();
-//        Vector<Vector<Object>> linesDataVariedadTable = new Vector<Vector<Object>>();
-		variedadTable.getItems().clear();
- 
-//        
+	public void searchVariedadParent(String letter){
+		List<MProduct> product = new Query(Env.getCtx(), MProduct.Table_Name, "name like '"+letter+"%' and isSummary = ?", null).setParameters(true).setOrderBy("name").list();
+		variedadTableParent.getItems().clear();
+		variedadTableChild.getItems().clear();
+        
         for (int i = 0; i < product.size(); i++) {
-//           	Vector<Object> line = new Vector<Object>();
-//           	linesDataVariedadTable.add(line);
-//           	line.add(product.get(i).getName());	
-    		Listitem lt = new Listitem(); 
+    		ListItem lt = new ListItem(); 
     		Listcell a = new Listcell();
     		Button button = new Button(product.get(i).getName());
     		button.setHeight("40px");
     		button.setWidth("100%");
-    		button.setAttribute("isVariedadTable", true);
+    		button.setAttribute("isVariedadButton", true);
+    		button.setAttribute("isParent", true);
+    		button.setAttribute("M_Product_ID", product.get(i).get_ID());
     		button.addActionListener(this);
     		a.appendChild(button);
     		lt.appendChild(a); 
-    		variedadTable.appendChild(lt);
-    		variedadTable.setVflex("150");
-    		variedadTable.renderAll();
+    		variedadTableParent.appendChild(lt);
+    		variedadTableParent.setVflex("150");
+    		variedadTableParent.renderAll();
 		}
-//
-//       	
-//	    ListModelTable variedadTableModelToProcess = new ListModelTable(linesDataVariedadTable);
-//		variedadTableModelToProcess.addTableModelListener(this);
-//		variedadTable.setModel(variedadTableModelToProcess);
-//		variedadTable.setHflex("100");
-//		variedadTable.repaint();
-		
-//		<listbox nonselectableTags="button, input">
-//	    <listitem><listcell><textbox/></listcell></listitem>
-//	    <listitem><listcell><button label="button"/></listcell></listitem>
-//	    <listitem><listcell><h:input xmlns:h="native"/></listcell></listitem>
-//	    <listitem><listcell><datebox/></listcell></listitem>
-//	</listbox>
-		
-		
-	
 	}
-
-		
-//		public void refreshUI(){
-//		variedadTable.appendItem("hoal","u0");
 	
-//	}
+	public void searchVariedadChild(int Parent_ID){
+		List<MProduct> product = new Query(Env.getCtx(), MProduct.Table_Name, "Parent_ID =?", null).setParameters(Parent_ID).setOrderBy("name").list();
+		variedadTableChild.getItems().clear();
+        
+        for (int i = 0; i < product.size(); i++) {
+        	ListItem lt = new ListItem(); 
+    		Listcell lc = new Listcell();
+    		Button button = new Button(product.get(i).getClassification());
+    		button.setHeight("28px");
+    		button.setWidth("100%");
+    		button.setAttribute("isVariedadButton", true);
+    		button.setAttribute("isChild", true);
+    		button.setAttribute("M_Product_ID", product.get(i).get_ID());
+    		button.addActionListener(this);
+    		lc.appendChild(button);
+    		lt.appendChild(lc); 
+    		variedadTableChild.appendChild(lt);
+    		variedadTableChild.setVflex("150");
+    		variedadTableChild.renderAll();
+		}
+	}
 
 	@Override
 	public ADForm getForm() {
@@ -772,10 +722,12 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		return true;
 		
 	}
-	public void registrar()
+	public void regeistrar()
 	{
 		if(!validar())
 			return;
+		Timestamp tsDateField = dateField.getValue()!=null?(Timestamp)dateField.getValue():null;
+		Date date = new Date(tsDateField.getTime());;
 		Properties m_ctx = Env.getCtx();
 		MLocator mLocator = new MLocator(m_ctx,idLocator, null);
 		int m_AD_Org_ID = (int) wtOrg.getValue();
@@ -786,7 +738,7 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 //		Trx t = Trx.get(Trx.createTrxName("trx_ccb"), true);
 		BigDecimal cantEtiquetas = new BigDecimal (wsEtiquetas.getValue().toString().trim());
 		BigDecimal tallos = new BigDecimal (wtTallos.getDisplay().trim());
-    	String tmstmp = new Integer(1900+this.date.getYear()).toString();
+    	String tmstmp = new Integer(1900+date.getYear()).toString();
     	Calendar cal = new GregorianCalendar();
     	cal.setTime(date);
     	Integer mes = new Integer(1+date.getMonth());
@@ -849,26 +801,24 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 	}//imprimir
 	
 	public void imprimir(int idFlcCodaBar){
-
-	  MQuery query = new MQuery("flc_codabar");
-	  query.addRestriction("flc_codabar_id", MQuery.EQUAL, idFlcCodaBar);
-	  MPrintFormat format = MPrintFormat.get (Env.getCtx(), 1000062, false);
-	  PrintInfo info = new PrintInfo("Codabar",X_FLC_CodaBar.Table_ID,idFlcCodaBar);
-	  ReportEngine re = new ReportEngine(Env.getCtx(), format, query, info);
-	  re.setWindowNo(form.getWindowNo());
-	  ReportCtl.preview(re);
+//
+//	  MQuery query = new MQuery("flc_codabar");
+//	  query.addRestriction("flc_codabar_id", MQuery.EQUAL, idFlcCodaBar);
+//	  MPrintFormat format = MPrintFormat.get (Env.getCtx(), 1000062, false);
+//	  PrintInfo info = new PrintInfo("Codabar",X_FLC_CodaBar.Table_ID,idFlcCodaBar);
+//	  ReportEngine re = new ReportEngine(Env.getCtx(), format, query, info);
+//	  re.setWindowNo(form.getWindowNo());
+//	  ReportCtl.preview(re);
+//	  
 	  
-//	  Clients.clearBusy();
-//		try {
-//			Window win = new SimplePDFViewer(form.getFormName(), new FileInputStream(re.getPDF()));
-//			SessionManager.getAppDesktop().showWindow(win, "center");
-//		} catch (Exception e)
-//		{
-//			
-//		}
+		MPrintFormat format = MPrintFormat.get (Env.getCtx(), 1000062, false);
+		MQuery query = new MQuery("flc_codabar");
+    	query.addRestriction("flc_codabar_id", MQuery.EQUAL, idFlcCodaBar);
+    	PrintInfo info = new PrintInfo("Codabar",X_FLC_CodaBar.Table_ID,idFlcCodaBar);
+		ReportEngine re = new ReportEngine(Env.getCtx(), format, query, info);
+    	re.print();
 		
 	}
-	///fercho
 	public static int getMAttributeSetInstanceId(int m_attrinuteset_id, String guarantedate){	
     	int returnValue=0;
     	int VLSValue=0;
@@ -912,5 +862,166 @@ public class W_FormSales implements IFormController, EventListener<Event>, WTabl
 		}
 		
 	}
+	public String registrar2(){
+			  MLocator MLocator = new MLocator(Env.getCtx(),idLocator, null);
+			  m_AD_Org_ID = MLocator.getAD_Org_ID();
+		      m_AD_Client_ID = MLocator.getAD_Client_ID();
+			  Timestamp tsDateField = dateField.getValue()!=null?(Timestamp)dateField.getValue():null;
+			  Date fechaFlor = new Date(tsDateField.getTime());
+		      BigDecimal DefaultxHalf = Env.ONE;
+			  BigDecimal tallos = new BigDecimal (wtTallos.getDisplay().trim());
+			  int idProyecto = 1000000;
+			  int idCampaign = 1000000;
+			  BigDecimal cantEtiquetas = new BigDecimal (wsEtiquetas.getValue().toString().trim());
+  	
+		 
+			  if(validar()){
+				int idProducto = variedadSelected.get_ID();
+				getCActivityId(idProducto);				
+				BigDecimal qty = new BigDecimal(wsEtiquetas.getValue().toString().trim());				
+				int QtyBOx = 0;
+
+				if (idProducto>0){
+					MWarehouse MWarehouse = new MWarehouse(Env.getCtx(), MLocator.get_ID(), null);
+					MProduct MProduct = new MProduct(Env.getCtx(),idProducto,null);
+//				    int C_DocType_ID = 0 ;          	        
+//				    if(MWarehouse.get_Value("WarehouseCategory").toString().contains("CUL") || MWarehouse.get_Value("WarehouseCategory").toString().contains("NAC"))
+//						C_DocType_ID = m_C_DocTypeInputsProduction_ID;
+//					else if(MWarehouse.get_Value("WarehouseCategory").toString().contains("VEN"))
+//						C_DocType_ID = m_C_DocTypeInputsProcessed_ID;
+				    
+						
+					if(MWarehouse.getValue().substring(2, 3).compareTo("H")==0){
+				        	  DefaultxHalf = MProduct.getUnitsPerPallet();
+//				        	  BoxSize = "H";
+				        	  QtyBOx = qty.intValue();
+				        	  qty = qty.multiply(DefaultxHalf).negate();
+				        	  
+				        	  if(DefaultxHalf.compareTo(Env.ZERO)==0){
+				        			JOptionPane.showMessageDialog(null, "Producto sin Stems para cajas Half ", MProduct.getValue() +" "+MProduct.getName(), JOptionPane.ERROR_MESSAGE); 
+				                	System.out.print("\007");
+				                    System.out.flush();
+				                    java.awt.Toolkit.getDefaultToolkit().beep();
+				               }
+				     }else
+							qty = qty.multiply(tallos.negate());
+									
+//					Trx t = Trx.get(Trx.createTrxName("trx_ccb"), true);
+					MInventory inv = new MInventory(Env.getCtx(),0,null);
+		    		inv.setClientOrg(m_AD_Client_ID, m_AD_Org_ID);
+			        inv.setAD_Org_ID(m_AD_Org_ID);
+			        inv.setDescription("Ingreso de Flor Procesada :" + fechaFlor.getTime());
+			    	inv.setM_Warehouse_ID(MWarehouse.get_ID());
+			        inv.setMovementDate(new Timestamp(fechaFlor.getTime()));
+					inv.setC_DocType_ID(1000045);  //Inventario fisico phys inventory
+			        inv.setC_Project_ID(idProyecto);
+			        inv.setC_Campaign_ID(idCampaign);
+			        inv.setDocStatus("DR");
+			        inv.saveEx();
+			        	
+				    String tmstmp = new Integer(1900+fechaFlor.getYear()).toString();
+				    Calendar cal = new GregorianCalendar();
+				    cal.setTime(fechaFlor);
+				    Integer mes = new Integer(1+fechaFlor.getMonth());
+				    Integer dia = new Integer(cal.get(Calendar.DAY_OF_MONTH));
+				    tmstmp += "-"+((mes<10)?"0"+mes:mes)+"-"+((dia<10)?"0"+dia:dia)+" 00:00:00";
+				    int MAttributeSetInstanceId = getMAttributeSetInstanceId(m_M_AttributeSet_ID,java.sql.Timestamp.valueOf(tmstmp).toString().substring(0, 10));
+				    MAttributeSetInstance asi = new MAttributeSetInstance(Env.getCtx(),MAttributeSetInstanceId,null);
+				        	
+				    if (MAttributeSetInstanceId == 0){
+				        asi.setM_AttributeSet_ID(m_M_AttributeSet_ID);  //atributos de rosas fecha obligatoria
+					    asi.setGuaranteeDate(java.sql.Timestamp.valueOf(tmstmp));
+					    asi.setDescription(java.sql.Timestamp.valueOf(tmstmp).toString().substring(0, 10));
+					    asi.saveEx();
+				     }
+				            	MInventoryLine invl = new MInventoryLine(Env.getCtx(),0,null);
+					        	invl.setAD_Org_ID(m_AD_Org_ID);
+					        	invl.setM_Inventory_ID(inv.getM_Inventory_ID());
+					        	invl.setLine(10);
+					        	invl.setM_Locator_ID(idLocator);
+					        	invl.setM_Product_ID(idProducto);
+					        	invl.setM_AttributeSetInstance_ID(MAttributeSetInstanceId==0?asi.get_ID():MAttributeSetInstanceId);
+					        	//invl.setQtyInternalUse(new BigDecimal(String.valueOf(this.labelBunch)).negate());
+					        	invl.setQtyInternalUse(qty);
+					        	invl.setC_Charge_ID(m_C_CHARGE_ID);  //Cargo Produccion de Flores
+					        	invl.setM_Locator_ID(idLocator);
+					        	invl.setDescription("Ingreso de Flor Procesada :" + fechaFlor.getTime());
+					        	invl.saveEx();
+				        	
+				        inv.prepareIt();
+			        	inv.approveIt();
+			        	inv.completeIt();
+			        	inv.setProcessed(true);
+			        	inv.setDocStatus("CO");
+			        	inv.saveEx();
+			        	//if(!isNacional)
+			        //	{
+			        	MFlCodabar code = new MFlCodabar(Env.getCtx(), 0, null);
+
+			    		code.setQty(cantEtiquetas);
+			    		code.setUnitsPerPack(tallos.intValue()); //code.set_CustomColumn("txb_id", idBunch); 
+			            code.set_CustomColumn("mesa", wsMesas.getValue().toString());
+			    		code.setC_Project_ID(idProyecto);
+			    		code.setC_Campaign_ID(idCampaign);
+			    		code.setM_Product_ID(variedadSelected.get_ID());
+			    		code.setAD_Org_ID(m_AD_Org_ID);
+			    		code.setM_Locator_ID(idLocator);
+			    		code.setM_Inventory_ID(inv.get_ID());
+			        	code.setM_AttributeSetInstance_ID(MAttributeSetInstanceId==0?asi.get_ID():MAttributeSetInstanceId);
+			       		code.saveEx();
+			    		code.setUPC(String.valueOf(code.get_ID()));
+			    		code.saveEx();
+					    code.saveEx();
+
+					    imprimir(code.get_ID());
+//		        		t.commit();
+			        	
+					    return inv.getDocumentNo().concat(" / UPC: ").concat(code.getUPC().concat(" OK ")) ;   
+			           	   
+				}//if producto
+				else
+				{	
+					JOptionPane.showMessageDialog(null, "Producto no Existe ", "Favor revisar", JOptionPane.ERROR_MESSAGE); 
+		        	System.out.print("\007");
+		            System.out.flush();
+		            java.awt.Toolkit.getDefaultToolkit().beep();
+		            return "Producto no Existe";
+				}//else producto	
+			} else {
+				JOptionPane.showMessageDialog(null, "Favor revisar los parametros o Cantidad", "Falta Informacion", JOptionPane.ERROR_MESSAGE); 
+		    	System.out.print("\007");
+		        System.out.flush();
+		        java.awt.Toolkit.getDefaultToolkit().beep(); 
+		        return "Favor revisar los parametros o Cantidad";
+		    }
+
+
+		}//imprimir
 	
+	public int getCActivityId(int idProducto){
+    	int returnValue=0;
+        String consulta = "SELECT MAX(C_Activity_id) AS C_Activity_id " +
+        		" FROM ADEMPIERE.C_Activity " +
+        		" WHERE m_product_id =  " + idProducto +
+        		" AND name like  '%Materiales%' " +
+        		"      AND ad_client_id         = " + Env.getAD_Client_ID(Env.getCtx()) ;
+        try {
+            PreparedStatement pstmt = DB.prepareStatement(consulta, null);
+            //pstmt.setInt(1, Env.getAD_Client_ID(Env.getCtx()));
+            ResultSet rs = pstmt.executeQuery();
+           // System.out.println("getMLocatorId: " + consulta);
+            while (rs.next()) {
+            	returnValue=rs.getInt("C_Activity_id");
+            }
+            rs.close();
+            pstmt.close();
+        } catch (SQLException ex) {
+            Logger.getLogger(W_FormSales.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return returnValue;
+    }
+	
+	
+	
+
 }
