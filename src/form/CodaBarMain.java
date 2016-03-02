@@ -10,7 +10,6 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
-import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -19,6 +18,7 @@ import javax.swing.JOptionPane;
 import model.MFlCodabar;
 import model.X_FLC_CodaBar;
 
+import org.adempiere.webui.apps.AEnv;
 import org.adempiere.webui.component.Button;
 import org.adempiere.webui.component.Grid;
 import org.adempiere.webui.component.Label;
@@ -42,7 +42,6 @@ import org.compiere.model.MLocator;
 import org.compiere.model.MLookup;
 import org.compiere.model.MLookupFactory;
 import org.compiere.model.MProduct;
-import org.compiere.model.MProductCategory;
 import org.compiere.model.MQuery;
 import org.compiere.model.MSysConfig;
 import org.compiere.model.MWarehouse;
@@ -54,9 +53,11 @@ import org.compiere.print.ReportEngine;
 import org.compiere.util.DB;
 import org.compiere.util.DisplayType;
 import org.compiere.util.Env;
+import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
+import org.zkoss.zul.A;
 import org.zkoss.zul.Borderlayout;
 import org.zkoss.zul.Center;
 import org.zkoss.zul.Div;
@@ -131,17 +132,20 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 	private WTableDirEditor wtOrg;
 	private Listbox variedadTableChild;
 	private Label labelLongitud;
-	private org.zkoss.zul.Calendar calendar;
 	private WDateEditor dateField;
 	private int m_AD_Org_ID;
 	private int m_AD_Client_ID;
-	private int m_C_DocTypeInputsProduction_ID;
 	private int m_C_CHARGE_ID;
-	private int m_C_DocTypeInputsProcessed_ID;
 	private MWarehouse MWarehouse;
 	private Label lblTipoBunch;
+	private String codaBartype;
+	private WTableDirEditor wlCliente;
+	private WTableDirEditor wlAbierto;
+	private int idCodaBar = 0;
+//	private A linkCodaBar;
+	private Row gridSouthRow;
 	protected void zkInit(String codaBarType) throws Exception {
-		
+		this.codaBartype = codaBarType;
 
 		Borderlayout mainLayout = new Borderlayout();
 		form.appendChild(mainLayout);
@@ -203,12 +207,30 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 		
 		rowCenter2 = rowsCenter2.newRow();
 		rowCenter2.setStyle("height:30px");
-
 		
-//		wlTipoBunch = new WLocatorEditor ("M_Locator_ID", true, false, true, locator, form.getWindowNo());
-		MLookup lookupLocator = getLookupLocator(codaBarType);			
-		wlTipoBunch = new WTableDirEditor("M_Locator_ID", true, false, true, lookupLocator);
-		wlTipoBunch.getComponent().setStyle(styleLabel);
+		if (codaBarType.equals(CodaBarType.POSTCOSECHA)){	
+			Div divPrueba = new Div();
+			MLookup lookupLocatorAbierto = getLookupLocator("mAbierto");			
+			wlAbierto = new WTableDirEditor("M_Locator_ID", true, false, true, lookupLocatorAbierto);
+			wlAbierto.getComponent().setStyle(styleLabel);
+			
+			wlTipoBunch = wlAbierto;
+			lblTipoBunch.setValue("Tipo Bunch");
+					
+			MLookup lookupLocatorCliente = getLookupLocator("mClientes");
+			wlCliente = new WTableDirEditor("M_Locator_ID", true, false, true, lookupLocatorCliente);
+			wlCliente.getComponent().setStyle(styleLabel);
+			wlCliente.setVisible(false);
+			
+			divPrueba.appendChild(wlAbierto.getComponent());
+			divPrueba.appendChild(wlCliente.getComponent());
+			rowCenter2.appendCellChild(divPrueba,2);
+		}else{
+			MLookup lookupLocator = getLookupLocator(codaBartype);			
+			wlTipoBunch = new WTableDirEditor("M_Locator_ID", true, false, true, lookupLocator);
+			wlTipoBunch.getComponent().setStyle(styleLabel);
+			rowCenter2.appendCellChild(wlTipoBunch.getComponent(),2);
+		}
 		
 		MLookup lookupTallos = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LIST, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "AD_Ref_List_ID", 0, false, "(AD_Reference_ID=1000017)");
 		wtTallos = new WTableDirEditor("AD_Ref_List_ID", true, false, true, lookupTallos);
@@ -226,7 +248,8 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 	    wsEtiquetas.getComponent().setWidth("50%");
 	    wsEtiquetas.getComponent().setStyle(styleLabel);
 	    wsEtiquetas.setMandatory(true);
-		rowCenter2.appendCellChild(wlTipoBunch.getComponent(),2);
+		
+		
 		rowCenter2.appendChild(wtTallos.getComponent());
 		rowCenter2.appendChild(wsMesas.getComponent());
 		rowCenter2.appendChild(wsEtiquetas.getComponent());
@@ -372,11 +395,11 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 		buttonY.setStyle(styleButtonLetter);
 		buttonZ = new Button("Z");
 		buttonZ.setStyle(styleButtonLetter);
-		buttonAceptar = new Button("Aceptar");
+		buttonAceptar = new Button("Registrar/Imprimir");
 		buttonAceptar.setStyle("width:100%; height:100%;font-size: 15px");
 		buttonBorrar = new Button("Borrar");
 		buttonBorrar.setStyle("width:100%; height:70px;font-size: 15px");
-		buttonAnular = new Button("Anular de Exportable");
+		buttonAnular = new Button("Anular Ingresos");
 		buttonAnular.setStyle("width:100%; height:100%;font-size: 15px;");
 		Space space = new Space();
 		rowCenterLetters.appendChild(buttonY);
@@ -391,22 +414,26 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 		Rows rowsCenterDown = gridCenterDown.newRows();
 		
 		Row rowCenterDown = rowsCenterDown.newRow();
-		buttonInv = new Button("Inventario");
-//		buttonInv.setStyle("width:100%; height:100%;font-size: 15px");
-		buttonOrden = new Button("Orden Fija");
+		buttonInv = new Button("Mercado Abierto");
+		buttonOrden = new Button("Clientes");
 		buttonImpresion = new Button("Impresión");
-		buttonReemb = new Button("Reembonche");
+		buttonReemb = new Button("Registrar");
 		buttonBQTS = new Button("BQTS");
-		rowCenterDown.appendCellChild(buttonInv,2);
-		rowCenterDown.appendCellChild(buttonOrden,2);
+		if (codaBartype.equals(CodaBarType.POSTCOSECHA)){
+			rowCenterDown.appendCellChild(buttonInv,2);
+			rowCenterDown.appendCellChild(buttonOrden,2);
+		}
 		rowCenterDown.appendCellChild(buttonImpresion,2);
 		rowCenterDown.appendCellChild(buttonReemb,2);
-		rowCenterDown.appendChild(buttonBQTS);
-
-	
-
 		
-		
+//		South mainSouthPanel = new South();
+//		mainLayout.appendChild(mainSouthPanel);
+//		
+//		Grid gridSouth = GridFactory.newGridLayout();
+//		mainSouthPanel.appendChild(gridSouth);
+//		Rows gridSouthRows = gridSouth.newRows();
+//		gridSouthRow = gridSouthRows.newRow();
+
 		//************************ East********************************//
 		
 		East mainPanelEast = new East();
@@ -427,19 +454,18 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 		cal.set(Calendar.SECOND, 0);
 		cal.set(Calendar.MILLISECOND, 0);
 		dateField.setValue(new Timestamp(cal.getTimeInMillis()));
-//			calendar = new org.zkoss.zul.Calendar();
-//			calendar.setWidth("100%");
-
 			
 
 			northEeast.appendChild(dateField.getComponent());
-			
 			Center centerEast = new Center();
 			layoutEast.appendChild(centerEast);
 
 			variedadTableParent = new Listbox();
 			centerEast.appendChild(variedadTableParent);
-	  
+			
+    		labelLongitud = new Label("Longitud");
+    		variedadTableChild = new Listbox();
+		if (codaBarType == CodaBarType.POSTCOSECHA){
 		   East eastEast = new East();
 		   layoutEast.appendChild(eastEast);
 		   eastEast.setWidth("25%");
@@ -447,17 +473,15 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 		      Borderlayout southEastLayout = new Borderlayout();
 		      eastEast.appendChild(southEastLayout);
 		      		North northsouthE = new North();
-		      		labelLongitud = new Label("Longitud");
-//		      		labelLongitud.set
+		  
 		      		labelLongitud.setStyle("font-size:11px;font-weight: bold");
 		      		northsouthE.appendChild(labelLongitud);
 		      		southEastLayout.appendChild(northsouthE);
 		      				
 		      		Center centerSouthC = new Center();
-		      		southEastLayout.appendChild(centerSouthC);		      		
-		 		    variedadTableChild = new Listbox();
+		      		southEastLayout.appendChild(centerSouthC);		      	
 		      		centerSouthC.appendChild(variedadTableChild);
-//		           
+		 }
 		   		
 			 
 			 ///////////////////AÑADIR EVENTOS////////////////
@@ -506,14 +530,17 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 
 				buttonOrden.addEventListener(Events.ON_CLICK, this);
 				buttonImpresion.addEventListener(Events.ON_CLICK, this);
+				buttonInv.addEventListener(Events.ON_CLICK, this);
+				buttonOrden.addEventListener(Events.ON_CLICK, this);
 				buttonReemb.addEventListener(Events.ON_CLICK, this);
 				buttonBQTS.addEventListener(Events.ON_CLICK, this);
 				wlTipoBunch.addValueChangeListener(this);
 				
 				wsMesas.getComponent().addEventListener(Events.ON_FOCUS, this);
 				wsEtiquetas.getComponent().addEventListener(Events.ON_FOCUS, this);	
-		
+//				activateButton();
 	}
+
 	private MLookup getLookupLocator(String codaBarType) throws Exception {
 		MLookup lookupLocator = null;	
 	  
@@ -521,15 +548,30 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters("NacionalSA").first();
 			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
 			 lblTipoBunch.setValue("Motivo Nacional");
+		}else if (codaBarType.equals(CodaBarType.PRODUCCION)){
+			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters("Cultivo").first();
+			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
+			 lblTipoBunch.setValue("Bloques Cultivo");
+		}else if (codaBarType.equals(CodaBarType.PRODUCCION) && codaBarType.equals("mAbierto")){
+			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters("Insumos").first();//:TODO
+			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
+		}else if (codaBarType.equals(CodaBarType.PRODUCCION) && codaBarType.equals("mClientes")){
+			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters("Clientes").first();
+			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
+		}else{
+			MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "isActive='Y'", null).first();
+			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
+
 		}
+		
 		return lookupLocator;
 	}
 	public void loadValueVariable(){
         m_AD_Client_ID = Env.getAD_Client_ID(Env.getCtx());
         m_M_AttributeSet_ID = MSysConfig.getIntValue("FLC_DateM_AttributeSet_ID", 0); 
-        m_C_DocTypeInputsProduction_ID = MSysConfig.getIntValue("FLC_InputsProductionC_DocType_ID", 0, m_AD_Client_ID);
+        MSysConfig.getIntValue("FLC_InputsProductionC_DocType_ID", 0, m_AD_Client_ID);
 		m_C_CHARGE_ID = MSysConfig.getIntValue("FLC_InputsC_CHARGE_ID", 0, m_AD_Client_ID);
-		m_C_DocTypeInputsProcessed_ID = MSysConfig.getIntValue("FLC_InputsProceessedC_DocType_ID", 0, m_AD_Client_ID);
+		MSysConfig.getIntValue("FLC_InputsProceessedC_DocType_ID", 0, m_AD_Client_ID);
 	}
 	@Override
 	public void onEvent(Event event) throws Exception {
@@ -537,14 +579,15 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 			Button button = (Button)event.getTarget();
 			Boolean isVariedadButton = button.getAttribute("isVariedadButton") == null?false:Boolean.parseBoolean(button.getAttribute("isVariedadButton").toString());
 			if (isVariedadButton){
-				 Boolean isParent = button.getAttribute("isParent") == null?false:Boolean.parseBoolean(button.getAttribute("isParent").toString());
+				 Boolean isVariedadSelected = button.getAttribute("isVariedadSelected") == null?false:Boolean.parseBoolean(button.getAttribute("isVariedadSelected").toString());
 				 int M_Product_ID  =Integer.parseInt(button.getAttribute("M_Product_ID").toString());		
-				 if(isParent){
+				 if(isVariedadSelected){
+						variedadSelected = new MProduct(Env.getCtx(), M_Product_ID, null);
+						wsVariedad.setValue(variedadSelected.getName());
+				 }else{		
+
 					labelLongitud.setValue(button.getLabel() );
 					searchVariedadChild(M_Product_ID);
-				 }else{		
-					variedadSelected = new MProduct(Env.getCtx(), M_Product_ID, null);
-					wsVariedad.setValue(variedadSelected.getName());
 				}
 			}
 		}
@@ -584,45 +627,44 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 					wsEtiquetas.getComponent().setText(wsEtiquetas.getComponent().getText().substring(0, wsEtiquetas.getComponent().getText().length()-1));
 			
 		}else if(event.getTarget().equals(buttonAceptar)){
-			registrar2();	
-			
-		}else if(event.getTarget().equals(calendar)){
-			org.zkoss.zul.Calendar calendar = (org.zkoss.zul.Calendar)event.getTarget();
-			System.out.println(calendar.getValue());
+			registrar();
+		    imprimir(idCodaBar);
+		}else if(event.getTarget().equals(buttonInv)){
+			onClickButtonInv();
+		}else if(event.getTarget().equals(buttonOrden)){
+			onClickButtonClientes();
+		}else if(event.getTarget().equals(buttonImpresion)){
+			if(idCodaBar !=0)
+				imprimir(idCodaBar);
+			else 
+				FDialog.info(form.getWindowNo(), form, "", "Debe guardar primero un CodaBar");
+		}else if (event.getTarget().equals(buttonReemb)){
+			registrar();
 		}
 	}
 	
-
-	private void CreateProduct() {
-		 List<MProduct> products = new Query(Env.getCtx(), MProduct.Table_Name,"C_UOM_ID = ?",null).setParameters(1000000).list();
-		 
-		 for (MProduct mProduct : products) {
-			
-			MProductCategory category = new MProductCategory(Env.getCtx(), mProduct.getM_Product_Category_ID(), null);
-			MProduct productSearch = new Query(Env.getCtx(),MProduct.Table_Name,"name=?",null).setParameters(category.getName()).first();
-			if(productSearch !=null)
-				 break;
-			MProduct productNew = new MProduct(Env.getCtx(), 0,null);
-			productNew.setName(category.getName());
-			productNew.setValue(category.getName());
-			productNew.setIsSummary(true);
-			productNew.setM_Product_Category_ID(category.get_ID());
-			productNew.setC_UOM_ID(1000000);
-			productNew.save();
-			
-			List<MProduct> productUpdate = new Query(Env.getCtx(), 
-			              MProduct.Table_Name,"M_Product_Category_ID = ?",null).setParameters(category.get_ID()).list();
-			for (MProduct mProductUpdate : productUpdate) {
-				mProductUpdate.set_ValueOfColumn("Parent_ID", productNew.get_ID());
-				mProductUpdate.save();
-			}
-			
-		 }
+	private void onClickButtonInv() throws Exception{
+		wlCliente.setVisible(false);
+		wlAbierto.setVisible(true);
+		wlTipoBunch = wlAbierto;
+		lblTipoBunch.setValue("Tipo Bunch");
+	}
+	private void onClickButtonClientes() throws Exception{
+		wlCliente.setVisible(true);
+		wlAbierto.setVisible(false);
+		wlTipoBunch = wlCliente;
+		lblTipoBunch.setValue("Clientes");
 	}
 
-	
 	public void searchVariedadParent(String letter){
-		List<MProduct> product = new Query(Env.getCtx(), MProduct.Table_Name, "name like '"+letter+"%' and isSummary = ?", null).setParameters(true).setOrderBy("name").list();
+		String andWhere = "";
+		boolean isSumary = true;
+		if(codaBartype.equals(CodaBarType.NACIONAL)||codaBartype.equals(CodaBarType.PRODUCCION)){
+			andWhere = "  and classification = 'N/A'";
+			isSumary = false;	
+		}		
+		
+		List<MProduct> product = new Query(Env.getCtx(), MProduct.Table_Name, "name like '"+letter+"%' and isSummary = ?"+ andWhere, null).setParameters(isSumary).setOrderBy("name").list();
 		variedadTableParent.getItems().clear();
 		variedadTableChild.getItems().clear();
         
@@ -633,7 +675,8 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
     		button.setHeight("40px");
     		button.setWidth("100%");
     		button.setAttribute("isVariedadButton", true);
-    		button.setAttribute("isParent", true);
+    		boolean isVariedadSelected = codaBartype.equals(CodaBarType.POSTCOSECHA)?false:true;
+    		button.setAttribute("isVariedadSelected", isVariedadSelected);
     		button.setAttribute("M_Product_ID", product.get(i).get_ID());
     		button.addActionListener(this);
     		a.appendChild(button);
@@ -655,7 +698,8 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
     		button.setHeight("28px");
     		button.setWidth("100%");
     		button.setAttribute("isVariedadButton", true);
-    		button.setAttribute("isChild", true);
+    		boolean isVariedadSelected = codaBartype.equals(CodaBarType.POSTCOSECHA)?true:false;
+    		button.setAttribute("isVariedadSelected", isVariedadSelected);
     		button.setAttribute("M_Product_ID", product.get(i).get_ID());
     		button.addActionListener(this);
     		lc.appendChild(button);
@@ -696,88 +740,9 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 			FDialog.error(form.getWindowNo(), form, "Error", "Debe seleccionar un Tipo de Bunch");
 			return false;
 		}
-		
-		
 		return true;
 		
 	}
-	public void regeistrar()
-	{
-		if(!validar())
-			return;
-		Timestamp tsDateField = dateField.getValue()!=null?(Timestamp)dateField.getValue():null;
-		Date date = new Date(tsDateField.getTime());;
-		Properties m_ctx = Env.getCtx();
-		MLocator mLocator = new MLocator(m_ctx,idLocator, null);
-		int m_AD_Org_ID = (int) wtOrg.getValue();
-	    int m_AD_Client_ID = mLocator.getAD_Client_ID();
-		MWarehouse mWarehouse = new MWarehouse(Env.getCtx(), mLocator.get_ID(), null);    	
-		int idProyecto = 1000000;
-		int idCampaign = 1000000;
-//		Trx t = Trx.get(Trx.createTrxName("trx_ccb"), true);
-		BigDecimal cantEtiquetas = new BigDecimal (wsEtiquetas.getValue().toString().trim());
-		BigDecimal tallos = new BigDecimal (wtTallos.getDisplay().trim());
-    	String tmstmp = new Integer(1900+date.getYear()).toString();
-    	Calendar cal = new GregorianCalendar();
-    	cal.setTime(date);
-    	Integer mes = new Integer(1+date.getMonth());
-    	Integer dia = new Integer(cal.get(Calendar.DAY_OF_MONTH));
-    	tmstmp += "-"+((mes<10)?"0"+mes:mes)+"-"+((dia<10)?"0"+dia:dia)+" 00:00:00";
-    	int MAttributeSetInstanceId = getMAttributeSetInstanceId(m_M_AttributeSet_ID,java.sql.Timestamp.valueOf(tmstmp).toString().substring(0, 10));
-    	MAttributeSetInstance asi = new MAttributeSetInstance(m_ctx,MAttributeSetInstanceId,null);
-			    	
-		MInventory inv = new MInventory(m_ctx,0,null);
-		inv.setClientOrg(m_AD_Client_ID, m_AD_Org_ID);
-		inv.setAD_Org_ID(m_AD_Org_ID);
-		inv.setDescription("Ingreso de Flor Procesada :" + date.getTime());
-		inv.setM_Warehouse_ID(mWarehouse.get_ID());
-		inv.setMovementDate(new Timestamp(date.getTime()));
-		inv.setC_DocType_ID(1000045);  //Inventario fisico phys inventory
-		inv.setC_Project_ID(idProyecto);
-		inv.setC_Campaign_ID(idCampaign);
-		inv.setDocStatus("DR");
-		inv.saveEx();
-		
-		System.out.println(inv.getDocumentInfo());
-
-		MInventoryLine invl = new MInventoryLine(m_ctx,0,null);
-		invl.setAD_Org_ID(m_AD_Org_ID);
-		invl.setM_Inventory_ID(inv.getM_Inventory_ID());
-		invl.setLine(10);
-		invl.setM_Locator_ID(idLocator);
-		invl.setM_Product_ID(variedadSelected.get_ID());
-		invl.setQtyInternalUse(cantEtiquetas.multiply(tallos).negate());
-		invl.setM_AttributeSetInstance_ID(MAttributeSetInstanceId==0?asi.get_ID():MAttributeSetInstanceId);
-		invl.setQtyInternalUse(new BigDecimal(wsMesas.getValue().toString()));
-		invl.setC_Charge_ID(1000009);  //Cargo Produccion de Flores
-		invl.setM_Locator_ID(idLocator);
-		invl.saveEx();
-				        	
-		inv.prepareIt();
-		inv.approveIt();
-		inv.completeIt();
-		inv.setProcessed(true);
-		inv.setDocStatus("CO");
-		inv.saveEx();
-
-		MFlCodabar code = new MFlCodabar(m_ctx, 0, null);
-
-		code.setQty(cantEtiquetas);
-		code.setUnitsPerPack(tallos.intValue()); //code.set_CustomColumn("txb_id", idBunch); 
-        code.set_CustomColumn("mesa", wsMesas.getValue().toString());
-		code.setC_Project_ID(idProyecto);
-		code.setC_Campaign_ID(idCampaign);
-		code.setM_Product_ID(variedadSelected.get_ID());
-		code.setAD_Org_ID(m_AD_Org_ID);
-		code.setM_Locator_ID(idLocator);
-		code.setM_Inventory_ID(inv.get_ID());
-   		code.saveEx();
-		code.setUPC(String.valueOf(code.get_ID()));
-		code.saveEx();
-		
-   		System.out.println(code.get_ID());
-   		imprimir(code.get_ID());
-	}//imprimir
 	
 	public void imprimir(int idFlcCodaBar){	  
 		MPrintFormat format = MPrintFormat.get (Env.getCtx(), 1000062, false);
@@ -831,34 +796,32 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 		}
 		
 	}
-	public String registrar2(){
+	public String registrar(){
 			  MLocator MLocator = new MLocator(Env.getCtx(),idLocator, null);
 			  m_AD_Org_ID = MLocator.getAD_Org_ID();
 		      m_AD_Client_ID = MLocator.getAD_Client_ID();
 			  Timestamp tsDateField = dateField.getValue()!=null?(Timestamp)dateField.getValue():null;
 			  Date fechaFlor = new Date(tsDateField.getTime());
 		      BigDecimal DefaultxHalf = Env.ONE;
-			  BigDecimal tallos = new BigDecimal (wtTallos.getDisplay().trim());
+
 			  int idProyecto = 1000000;
 			  int idCampaign = 1000000;
-			  BigDecimal cantEtiquetas = new BigDecimal (wsEtiquetas.getValue().toString().trim());
+
   	
 		 
 			  if(validar()){
+				BigDecimal cantEtiquetas = new BigDecimal (wsEtiquetas.getValue().toString().trim());
+				BigDecimal tallos = new BigDecimal (wtTallos.getDisplay().trim());
 				int idProducto = variedadSelected.get_ID();
 				getCActivityId(idProducto);				
 				BigDecimal qty = new BigDecimal(wsEtiquetas.getValue().toString().trim());				
-				int QtyBOx = 0;
-
 				if (idProducto>0){
 					MProduct MProduct = new MProduct(Env.getCtx(),idProducto,null);
 				    
 						
 					if(MWarehouse.getValue().substring(2, 3).compareTo("H")==0){
 				        	  DefaultxHalf = MProduct.getUnitsPerPallet();
-//				        	  BoxSize = "H";
-				        	  QtyBOx = qty.intValue();
-				        	  qty = qty.multiply(DefaultxHalf).negate();
+qty = qty.multiply(DefaultxHalf).negate();
 				        	  
 				        	  if(DefaultxHalf.compareTo(Env.ZERO)==0){
 				        			JOptionPane.showMessageDialog(null, "Producto sin Stems para cajas Half ", MProduct.getValue() +" "+MProduct.getName(), JOptionPane.ERROR_MESSAGE); 
@@ -935,9 +898,13 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 			    		code.setUPC(String.valueOf(code.get_ID()));
 			    		code.saveEx();
 					    code.saveEx();
-
-					    imprimir(code.get_ID());
-//		        		t.commit();
+					    idCodaBar = code.get_ID();
+//					    addLink(code);
+						FDialog.info(form.getWindowNo(), form, "", "Registro guardado con éxito");
+//						linkCodaBar.setLabel("coda bar:"+code.get_ID());
+//						linkCodaBar.setAttribute("Record_ID", String.valueOf(idCodaBar));
+//						linkCodaBar.setAttribute("AD_Table_ID", String.valueOf(1000014));
+//						linkCodaBar.addEventListener(Events.ON_CLICK, this);
 			        	
 					    return inv.getDocumentNo().concat(" / UPC: ").concat(code.getUPC().concat(" OK ")) ;   
 			           	   
@@ -983,7 +950,23 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
         }
         return returnValue;
     }
-	
+	public void addLink(MFlCodabar coda){
+		A link = new A("Coda Bar"+coda.get_ID());
+		link.setAttribute("Record_ID", coda.get_ID());
+		link.setAttribute("AD_Table_ID", coda.get_Table_ID());
+		link.addEventListener(Events.ON_CLICK, new EventListener<Event>() {
+		@Override
+		public void onEvent(Event e) throws Exception {
+		Component comp = e.getTarget();
+		Integer Record_ID = (Integer) comp.getAttribute("Record_ID");
+		Integer AD_Table_ID = (Integer) comp.getAttribute("AD_Table_ID");
+		AEnv.zoom(AD_Table_ID, Record_ID);
+		}
+		});
+
+		gridSouthRow.appendChild(link);
+
+	}
 	
 	
 

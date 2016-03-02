@@ -3,17 +3,16 @@ package form;
 import org.adempiere.webui.panel.ADForm;
 import org.adempiere.webui.panel.IFormController;
 
-
-public class WCodaBar_National extends CodaBarMain implements IFormController{
+public class WCodaBar_Production  extends CodaBarMain implements IFormController{
 
 	@Override
 	public ADForm getForm() {
 		return getADForm();
 	}
 
-	public WCodaBar_National(){
+	public WCodaBar_Production(){
 		try {
-			zkInit(CodaBarType.NACIONAL);
+			zkInit(CodaBarType.PRODUCCION);
 			loadValueVariable();
 		} catch (Exception e) {
 			e.printStackTrace();
