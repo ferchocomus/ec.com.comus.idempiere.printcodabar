@@ -20,12 +20,14 @@ import model.X_FLC_CodaBar;
 
 import org.adempiere.webui.apps.AEnv;
 import org.adempiere.webui.component.Button;
+import org.adempiere.webui.component.DesktopTabpanel;
 import org.adempiere.webui.component.Grid;
 import org.adempiere.webui.component.Label;
 import org.adempiere.webui.component.ListItem;
 import org.adempiere.webui.component.Listbox;
 import org.adempiere.webui.component.Row;
 import org.adempiere.webui.component.Rows;
+import org.adempiere.webui.component.Window;
 import org.adempiere.webui.editor.WDateEditor;
 import org.adempiere.webui.editor.WStringEditor;
 import org.adempiere.webui.editor.WTableDirEditor;
@@ -33,6 +35,7 @@ import org.adempiere.webui.event.ValueChangeEvent;
 import org.adempiere.webui.event.ValueChangeListener;
 import org.adempiere.webui.panel.ADForm;
 import org.adempiere.webui.panel.CustomForm;
+import org.adempiere.webui.session.SessionManager;
 import org.adempiere.webui.window.FDialog;
 import org.compiere.model.I_M_Warehouse;
 import org.compiere.model.MAttributeSetInstance;
@@ -66,13 +69,19 @@ import org.zkoss.zul.Listcell;
 import org.zkoss.zul.North;
 import org.zkoss.zul.Space;
 
+import component.FS_FormFactory;
 
 
 
 
-public class CodaBarMain implements EventListener<Event>,ValueChangeListener
+
+public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 {
 
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 5366098986862150300L;
 	private CustomForm form = new CustomForm();
 	private Listbox variedadTableParent;
 	private Button button0;
@@ -132,7 +141,7 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 	private WTableDirEditor wtOrg;
 	private Listbox variedadTableChild;
 	private Label labelLongitud;
-	private WDateEditor dateField;
+	protected WDateEditor dateField;
 	private int m_AD_Org_ID;
 	private int m_AD_Client_ID;
 	private int m_C_CHARGE_ID;
@@ -144,6 +153,9 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 	private int idCodaBar = 0;
 //	private A linkCodaBar;
 	private Row gridSouthRow;
+	public static Timestamp date;
+
+
 	protected void zkInit(String codaBarType) throws Exception {
 		this.codaBartype = codaBarType;
 
@@ -640,6 +652,13 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 				FDialog.info(form.getWindowNo(), form, "", "Debe guardar primero un CodaBar");
 		}else if (event.getTarget().equals(buttonReemb)){
 			registrar();
+		}else if (event.getTarget().equals(buttonAnular)){
+			
+			 date = dateField.getValue()!=null?(Timestamp)dateField.getValue():null;
+		
+			
+			ADForm formAnular = ADForm.openForm(1000007);
+			SessionManager.getAppDesktop().showWindow(formAnular);
 		}
 	}
 	
@@ -802,6 +821,7 @@ public class CodaBarMain implements EventListener<Event>,ValueChangeListener
 		      m_AD_Client_ID = MLocator.getAD_Client_ID();
 			  Timestamp tsDateField = dateField.getValue()!=null?(Timestamp)dateField.getValue():null;
 			  Date fechaFlor = new Date(tsDateField.getTime());
+			  
 		      BigDecimal DefaultxHalf = Env.ONE;
 
 			  int idProyecto = 1000000;
@@ -836,7 +856,8 @@ qty = qty.multiply(DefaultxHalf).negate();
 					MInventory inv = new MInventory(Env.getCtx(),0,null);
 		    		inv.setClientOrg(m_AD_Client_ID, m_AD_Org_ID);
 			        inv.setAD_Org_ID(m_AD_Org_ID);
-			        inv.setDescription("Ingreso de Flor Procesada :" + fechaFlor.getTime());
+//			        inv.setDescription("Ingreso de Flor Procesada :" + fechaFlor.getTime());
+			        inv.setDescription(getDescription());
 			    	inv.setM_Warehouse_ID(MWarehouse.get_ID());
 			        inv.setMovementDate(new Timestamp(fechaFlor.getTime()));
 					inv.setC_DocType_ID(1000045);  //Inventario fisico phys inventory
@@ -967,6 +988,29 @@ qty = qty.multiply(DefaultxHalf).negate();
 		gridSouthRow.appendChild(link);
 
 	}
+	
+    public String getDescription(){
+	   String Bodega = "Bodega";
+	   String Proyecto = "Proyecto";
+	   String Campana = "Campaña";
+	   StringBuilder description = new StringBuilder(); 
+       description.append("Corte: ").append(dateField.getValue())      
+   	       		 .append(" /  ").append(Bodega)
+   	              .append(" /  Proy: ").append(Proyecto)
+                      .append(" /  Camp: ").append(Campana);
+//                      .append(" / Prod: ").append(flc.Tipo)
+//                      .append(" - ").append(flc.Motivo)
+//                       .append(" - ").append(flc.Color)
+//                      .append(" - ").append(flc.Variedad)
+//                       .append(" - ").append(flc.Grupo)
+//                      .append(" - ").append(flc.Grado)
+//                      //.append(" - ").append(flc.Bunch)
+//                      .append("x").append(flc.labelBunch)
+//                      .append(" - ").append(flc.Mesa)
+//                      .append(" / Cant: : ").append(flc.Cantidad);
+       return description.toString();
+       }
+
 	
 	
 
