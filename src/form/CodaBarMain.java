@@ -20,14 +20,12 @@ import model.X_FLC_CodaBar;
 
 import org.adempiere.webui.apps.AEnv;
 import org.adempiere.webui.component.Button;
-import org.adempiere.webui.component.DesktopTabpanel;
 import org.adempiere.webui.component.Grid;
 import org.adempiere.webui.component.Label;
 import org.adempiere.webui.component.ListItem;
 import org.adempiere.webui.component.Listbox;
 import org.adempiere.webui.component.Row;
 import org.adempiere.webui.component.Rows;
-import org.adempiere.webui.component.Window;
 import org.adempiere.webui.editor.WDateEditor;
 import org.adempiere.webui.editor.WStringEditor;
 import org.adempiere.webui.editor.WTableDirEditor;
@@ -39,12 +37,14 @@ import org.adempiere.webui.session.SessionManager;
 import org.adempiere.webui.window.FDialog;
 import org.compiere.model.I_M_Warehouse;
 import org.compiere.model.MAttributeSetInstance;
+import org.compiere.model.MCampaign;
 import org.compiere.model.MInventory;
 import org.compiere.model.MInventoryLine;
 import org.compiere.model.MLocator;
 import org.compiere.model.MLookup;
 import org.compiere.model.MLookupFactory;
 import org.compiere.model.MProduct;
+import org.compiere.model.MProject;
 import org.compiere.model.MQuery;
 import org.compiere.model.MSysConfig;
 import org.compiere.model.MWarehouse;
@@ -53,6 +53,7 @@ import org.compiere.model.Query;
 import org.compiere.model.SystemIDs;
 import org.compiere.print.MPrintFormat;
 import org.compiere.print.ReportEngine;
+import org.compiere.util.CPreparedStatement;
 import org.compiere.util.DB;
 import org.compiere.util.DisplayType;
 import org.compiere.util.Env;
@@ -69,8 +70,6 @@ import org.zkoss.zul.Listcell;
 import org.zkoss.zul.North;
 import org.zkoss.zul.Space;
 
-import component.FS_FormFactory;
-
 
 
 
@@ -78,10 +77,6 @@ import component.FS_FormFactory;
 public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 {
 
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 5366098986862150300L;
 	private CustomForm form = new CustomForm();
 	private Listbox variedadTableParent;
 	private Button button0;
@@ -135,9 +130,9 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 	private WStringEditor wsEtiquetas;
 	private String number ="";
 	private int idLocator;
-	private MProduct variedadSelected;
+	protected static MProduct variedadSelected;
 	private int m_M_AttributeSet_ID;
-	private String fieldFocus;
+	private String fieldFocus = "";
 	private WTableDirEditor wtOrg;
 	private Listbox variedadTableChild;
 	private Label labelLongitud;
@@ -151,13 +146,23 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 	private WTableDirEditor wlCliente;
 	private WTableDirEditor wlAbierto;
 	private int idCodaBar = 0;
-//	private A linkCodaBar;
-	private Row gridSouthRow;
+	private A link;
+	private Div statusBar;
+	private int idProyecto;
+	private int idCampaign;
+	private int C_DocType_ID;
+	private int m_C_DocTypeInputsProduction_ID;
+	private int m_C_DocTypeInputsProcessed_ID;
+	private String locatorNacional;
+	private String locatorCultivo;
+	private String locatorPAbierto;
+	private String locatorPClientes;
 	public static Timestamp date;
 
 
 	protected void zkInit(String codaBarType) throws Exception {
 		this.codaBartype = codaBarType;
+		loadValueVariable();
 
 		Borderlayout mainLayout = new Borderlayout();
 		form.appendChild(mainLayout);
@@ -438,13 +443,9 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 		rowCenterDown.appendCellChild(buttonImpresion,2);
 		rowCenterDown.appendCellChild(buttonReemb,2);
 		
-//		South mainSouthPanel = new South();
-//		mainLayout.appendChild(mainSouthPanel);
-//		
-//		Grid gridSouth = GridFactory.newGridLayout();
-//		mainSouthPanel.appendChild(gridSouth);
-//		Rows gridSouthRows = gridSouth.newRows();
-//		gridSouthRow = gridSouthRows.newRow();
+		statusBar = new Div();
+		divCenter.appendChild(statusBar);
+
 
 		//************************ East********************************//
 		
@@ -547,43 +548,48 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 				buttonReemb.addEventListener(Events.ON_CLICK, this);
 				buttonBQTS.addEventListener(Events.ON_CLICK, this);
 				wlTipoBunch.addValueChangeListener(this);
-				
+								
 				wsMesas.getComponent().addEventListener(Events.ON_FOCUS, this);
 				wsEtiquetas.getComponent().addEventListener(Events.ON_FOCUS, this);	
-//				activateButton();
+				wlTipoBunch.getComponent().addEventListener(Events.ON_FOCUS, this);
+				wsVariedad.getComponent().addEventListener(Events.ON_FOCUS, this);
 	}
 
 	private MLookup getLookupLocator(String codaBarType) throws Exception {
 		MLookup lookupLocator = null;	
 	  
 		if (codaBarType.equals(CodaBarType.NACIONAL)){
-			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters("NacionalSA").first();
+			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters(locatorNacional).first();
 			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
 			 lblTipoBunch.setValue("Motivo Nacional");
 		}else if (codaBarType.equals(CodaBarType.PRODUCCION)){
-			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters("Cultivo").first();
+			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters(locatorCultivo).first();
 			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
 			 lblTipoBunch.setValue("Bloques Cultivo");
 		}else if (codaBarType.equals(CodaBarType.PRODUCCION) && codaBarType.equals("mAbierto")){
-			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters("Insumos").first();//:TODO
+			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters(locatorPAbierto).first();//:TODO
 			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
 		}else if (codaBarType.equals(CodaBarType.PRODUCCION) && codaBarType.equals("mClientes")){
-			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters("Clientes").first();
+			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "value =?", null).setParameters(locatorPClientes).first();
 			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
 		}else{
-			MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "isActive='Y'", null).first();
+			 MWarehouse = new Query(Env.getCtx(), I_M_Warehouse.Table_Name, "isActive='Y'", null).first();
 			 lookupLocator = MLookupFactory.get(Env.getCtx(), form.getWindowNo(), SystemIDs.REFERENCE_DATATYPE_LOCATOR, DisplayType.TableDir, Env.getLanguage(Env.getCtx()), "M_Locator_ID", 0, false, "(Isactive = 'Y' AND M_Warehouse_ID = "+MWarehouse.get_ID()+")");	
-
-		}
-		
+		}		
 		return lookupLocator;
 	}
 	public void loadValueVariable(){
         m_AD_Client_ID = Env.getAD_Client_ID(Env.getCtx());
         m_M_AttributeSet_ID = MSysConfig.getIntValue("FLC_DateM_AttributeSet_ID", 0); 
-        MSysConfig.getIntValue("FLC_InputsProductionC_DocType_ID", 0, m_AD_Client_ID);
+        m_C_DocTypeInputsProduction_ID =MSysConfig.getIntValue("FLC_InputsProductionC_DocType_ID", 0, m_AD_Client_ID);
 		m_C_CHARGE_ID = MSysConfig.getIntValue("FLC_InputsC_CHARGE_ID", 0, m_AD_Client_ID);
-		MSysConfig.getIntValue("FLC_InputsProceessedC_DocType_ID", 0, m_AD_Client_ID);
+		m_C_DocTypeInputsProcessed_ID = MSysConfig.getIntValue("FLC_InputsProceessedC_DocType_ID", 0, m_AD_Client_ID);
+		idProyecto = MSysConfig.getIntValue("FLC_idProyecto", 0, m_AD_Client_ID);
+		idCampaign = MSysConfig.getIntValue("FLC_idCampaign", 0, m_AD_Client_ID);
+		locatorNacional = MSysConfig.getValue("FLC_LocatorNacional", 0, m_AD_Client_ID);
+		locatorCultivo = MSysConfig.getValue("FLC_LocatorCultivo", 0, m_AD_Client_ID);
+		locatorPAbierto = MSysConfig.getValue("FLC_LocatorAbierto", 0, m_AD_Client_ID);
+		locatorPClientes = MSysConfig.getValue("FLC_LocatorClientes", 0, m_AD_Client_ID);	
 	}
 	@Override
 	public void onEvent(Event event) throws Exception {
@@ -594,10 +600,9 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 				 Boolean isVariedadSelected = button.getAttribute("isVariedadSelected") == null?false:Boolean.parseBoolean(button.getAttribute("isVariedadSelected").toString());
 				 int M_Product_ID  =Integer.parseInt(button.getAttribute("M_Product_ID").toString());		
 				 if(isVariedadSelected){
-						variedadSelected = new MProduct(Env.getCtx(), M_Product_ID, null);
-						wsVariedad.setValue(variedadSelected.getName());
+					variedadSelected = new MProduct(Env.getCtx(), M_Product_ID, null);
+					wsVariedad.setValue(variedadSelected.getName());
 				 }else{		
-
 					labelLongitud.setValue(button.getLabel() );
 					searchVariedadChild(M_Product_ID);
 				}
@@ -607,7 +612,11 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 			if (event.getTarget().equals(wsMesas.getComponent()))
 				fieldFocus = "wsMesas";
 			else if (event.getTarget().equals(wsEtiquetas.getComponent()))
-				fieldFocus = "wsEtiquetas";		
+				fieldFocus = "wsEtiquetas";
+			else if (event.getTarget().equals(wlTipoBunch.getComponent()))
+				fieldFocus = "wlTipoBunch";
+			else if (event.getTarget().equals(wsVariedad.getComponent()))
+				fieldFocus = "wsVariedad" ;
 		}else if (event.getTarget().equals(buttonA) || event.getTarget().equals(buttonB) || event.getTarget().equals(buttonC) || event.getTarget().equals(buttonD) 
 		 || event.getTarget().equals(buttonD) || event.getTarget().equals(buttonE) || event.getTarget().equals(buttonF) || event.getTarget().equals(buttonG) 
 	     || event.getTarget().equals(buttonH) || event.getTarget().equals(buttonI) || event.getTarget().equals(buttonJ) || event.getTarget().equals(buttonK) || event.getTarget().equals(buttonL)
@@ -634,9 +643,16 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 			 	
 		}else if(event.getTarget().equals(buttonBorrar)){
 			if(fieldFocus.equals("wsMesas") && !wsMesas.getComponent().getText().equals(""))
-					wsMesas.getComponent().setText(wsMesas.getComponent().getText().substring(0, wsMesas.getComponent().getText().length()-1));
-				else if(fieldFocus.equals("wsEtiquetas") && !wsEtiquetas.getComponent().getText().equals(""))
-					wsEtiquetas.getComponent().setText(wsEtiquetas.getComponent().getText().substring(0, wsEtiquetas.getComponent().getText().length()-1));
+				wsMesas.getComponent().setText(null);
+			else if(fieldFocus.equals("wsEtiquetas") && !wsEtiquetas.getComponent().getText().equals(""))
+				wsEtiquetas.getComponent().setText(null);
+			else if(fieldFocus.equals("wlTipoBunch") && !wlTipoBunch.getComponent().getText().equals(""))
+				wlTipoBunch.getComponent().setText("");
+			else if(fieldFocus.equals("wsVariedad") && !wsVariedad.getComponent().getText().equals("")){
+				wsVariedad.getComponent().setText("");
+				variedadSelected = null;
+			}else
+				deleteAll();
 			
 		}else if(event.getTarget().equals(buttonAceptar)){
 			registrar();
@@ -652,16 +668,32 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 				FDialog.info(form.getWindowNo(), form, "", "Debe guardar primero un CodaBar");
 		}else if (event.getTarget().equals(buttonReemb)){
 			registrar();
-		}else if (event.getTarget().equals(buttonAnular)){
-			
-			 date = dateField.getValue()!=null?(Timestamp)dateField.getValue():null;
-		
-			
+		}else if (event.getTarget().equals(buttonAnular)){		
+			date = dateField.getValue()!=null?(Timestamp)dateField.getValue():null;	
 			ADForm formAnular = ADForm.openForm(1000007);
 			SessionManager.getAppDesktop().showWindow(formAnular);
+		}else if (event.getTarget().equals(link)){
+			Component comp = event.getTarget();
+			Integer Record_ID = (Integer) comp.getAttribute("Record_ID");
+			Integer AD_Table_ID = (Integer) comp.getAttribute("AD_Table_ID");
+			AEnv.zoom(AD_Table_ID, Record_ID);
+			
 		}
 	}
 	
+	private void deleteAll() {
+		variedadSelected = null; 
+		wsVariedad.setValue("");
+		lblTipoBunch.setText("");
+		wlTipoBunch.setValue("");
+		wtTallos.setValue("");
+		wsMesas.setValue("");
+		wsEtiquetas.setValue("");
+		if (link!=null)
+			link.setLabel("");
+		
+	}
+
 	private void onClickButtonInv() throws Exception{
 		wlCliente.setVisible(false);
 		wlAbierto.setVisible(true);
@@ -783,10 +815,12 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
          		"'  AND at.ad_client_id         = " + Env.getAD_Client_ID(Env.getCtx()) +
        			"AND at.isactive        = 'Y' " ;
 
-         try {
-            PreparedStatement pstmt = DB.prepareStatement(consulta, null);
+        ResultSet rs = null;
+		CPreparedStatement pstmt = null;
+		try {
+             pstmt = DB.prepareStatement(consulta, null);
 
-            ResultSet rs = pstmt.executeQuery();
+             rs = pstmt.executeQuery();
             while (rs.next()) {
             	VLSValue=rs.getInt("M_AttributeSetinstance_ID");
             }
@@ -795,6 +829,11 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
         } catch (SQLException ex) {
             Logger.getLogger(CodaBarMain.class.getName()).log(Level.SEVERE, null, ex);
         }
+ 		finally
+ 		{
+ 			DB.close(rs, pstmt);
+ 			rs = null; pstmt = null;
+ 		}
         if(VLSValue>0)
         	return VLSValue;
         else 
@@ -819,16 +858,26 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 			  MLocator MLocator = new MLocator(Env.getCtx(),idLocator, null);
 			  m_AD_Org_ID = MLocator.getAD_Org_ID();
 		      m_AD_Client_ID = MLocator.getAD_Client_ID();
+//			  int idProyecto = 1000000;
+//			  int idCampaign = 1000000;
+			  MProject project = new MProject(Env.getCtx(), idProyecto, null);
+			  MCampaign campaing = new MCampaign(Env.getCtx(), idCampaign, null);
 			  Timestamp tsDateField = dateField.getValue()!=null?(Timestamp)dateField.getValue():null;
 			  Date fechaFlor = new Date(tsDateField.getTime());
+			  StringBuilder description = new StringBuilder();  
+		      description.append("Corte: ").append(dateField.getValue())      
+ 	       		 .append(" /  ").append(MLocator.getValue())
+ 	              .append(" /  Proy: ").append(project.getName())
+                    .append(" /  Camp: ").append(campaing.getName())
+                     .append(" / Prod: ").append(variedadSelected.getName())
+                    .append("/ Tallos").append(wtTallos.getDisplay().trim())
+                   .append(" - ").append(wsMesas.getDisplay())
+                    .append(" / Cant: : ").append(wsEtiquetas.getDisplay());
+			  
+			  
 			  
 		      BigDecimal DefaultxHalf = Env.ONE;
-
-			  int idProyecto = 1000000;
-			  int idCampaign = 1000000;
-
-  	
-		 
+  			 
 			  if(validar()){
 				BigDecimal cantEtiquetas = new BigDecimal (wsEtiquetas.getValue().toString().trim());
 				BigDecimal tallos = new BigDecimal (wtTallos.getDisplay().trim());
@@ -841,7 +890,7 @@ public class CodaBarMain  implements EventListener<Event>,ValueChangeListener
 						
 					if(MWarehouse.getValue().substring(2, 3).compareTo("H")==0){
 				        	  DefaultxHalf = MProduct.getUnitsPerPallet();
-qty = qty.multiply(DefaultxHalf).negate();
+				        	  qty = qty.multiply(DefaultxHalf).negate();
 				        	  
 				        	  if(DefaultxHalf.compareTo(Env.ZERO)==0){
 				        			JOptionPane.showMessageDialog(null, "Producto sin Stems para cajas Half ", MProduct.getValue() +" "+MProduct.getName(), JOptionPane.ERROR_MESSAGE); 
@@ -851,16 +900,20 @@ qty = qty.multiply(DefaultxHalf).negate();
 				               }
 				     }else
 							qty = qty.multiply(tallos.negate());
+					if(MWarehouse.get_Value("WarehouseCategory").toString().contains("CUL") || MWarehouse.get_Value("WarehouseCategory").toString().contains("NAC"))
+						C_DocType_ID = m_C_DocTypeInputsProduction_ID;
+					else if(MWarehouse.get_Value("WarehouseCategory").toString().contains("VEN"))
+						C_DocType_ID = m_C_DocTypeInputsProcessed_ID;
+					else 
+						C_DocType_ID = 1000045;				
 									
-//					Trx t = Trx.get(Trx.createTrxName("trx_ccb"), true);
 					MInventory inv = new MInventory(Env.getCtx(),0,null);
 		    		inv.setClientOrg(m_AD_Client_ID, m_AD_Org_ID);
 			        inv.setAD_Org_ID(m_AD_Org_ID);
-//			        inv.setDescription("Ingreso de Flor Procesada :" + fechaFlor.getTime());
-			        inv.setDescription(getDescription());
+			        inv.setDescription(description.toString());
 			    	inv.setM_Warehouse_ID(MWarehouse.get_ID());
 			        inv.setMovementDate(new Timestamp(fechaFlor.getTime()));
-					inv.setC_DocType_ID(1000045);  //Inventario fisico phys inventory
+					inv.setC_DocType_ID(C_DocType_ID);  //Inventario fisico phys inventory
 			        inv.setC_Project_ID(idProyecto);
 			        inv.setC_Campaign_ID(idCampaign);
 			        inv.setDocStatus("DR");
@@ -919,13 +972,10 @@ qty = qty.multiply(DefaultxHalf).negate();
 			    		code.setUPC(String.valueOf(code.get_ID()));
 			    		code.saveEx();
 					    code.saveEx();
+					    addLink(code);
 					    idCodaBar = code.get_ID();
-//					    addLink(code);
+					    
 						FDialog.info(form.getWindowNo(), form, "", "Registro guardado con éxito");
-//						linkCodaBar.setLabel("coda bar:"+code.get_ID());
-//						linkCodaBar.setAttribute("Record_ID", String.valueOf(idCodaBar));
-//						linkCodaBar.setAttribute("AD_Table_ID", String.valueOf(1000014));
-//						linkCodaBar.addEventListener(Events.ON_CLICK, this);
 			        	
 					    return inv.getDocumentNo().concat(" / UPC: ").concat(code.getUPC().concat(" OK ")) ;   
 			           	   
@@ -946,8 +996,7 @@ qty = qty.multiply(DefaultxHalf).negate();
 		        return "Favor revisar los parametros o Cantidad";
 		    }
 
-
-		}//imprimir
+		}
 	
 	public int getCActivityId(int idProducto){
     	int returnValue=0;
@@ -972,44 +1021,29 @@ qty = qty.multiply(DefaultxHalf).negate();
         return returnValue;
     }
 	public void addLink(MFlCodabar coda){
-		A link = new A("Coda Bar"+coda.get_ID());
+		statusBar.getChildren().clear();
+		//statusBar.appendChild(new Space());
+		//statusBar.appendChild(new Label(Msg.translate(Env.getCtx(), "PaymentAllocated")));
+
+		
+
+		A link = new A("Coda bar ID: "+coda.get_ID());
 		link.setAttribute("Record_ID", coda.get_ID());
 		link.setAttribute("AD_Table_ID", coda.get_Table_ID());
 		link.addEventListener(Events.ON_CLICK, new EventListener<Event>() {
-		@Override
-		public void onEvent(Event e) throws Exception {
-		Component comp = e.getTarget();
-		Integer Record_ID = (Integer) comp.getAttribute("Record_ID");
-		Integer AD_Table_ID = (Integer) comp.getAttribute("AD_Table_ID");
-		AEnv.zoom(AD_Table_ID, Record_ID);
-		}
+			@Override
+			public void onEvent(Event e) throws Exception {
+				Component comp = e.getTarget();
+				Integer Record_ID = (Integer) comp.getAttribute("Record_ID");
+				Integer AD_Table_ID = (Integer) comp.getAttribute("AD_Table_ID");
+				AEnv.zoom(AD_Table_ID, Record_ID);
+			}
 		});
-
-		gridSouthRow.appendChild(link);
+		
+		statusBar.appendChild(link);
 
 	}
 	
-    public String getDescription(){
-	   String Bodega = "Bodega";
-	   String Proyecto = "Proyecto";
-	   String Campana = "Campaña";
-	   StringBuilder description = new StringBuilder(); 
-       description.append("Corte: ").append(dateField.getValue())      
-   	       		 .append(" /  ").append(Bodega)
-   	              .append(" /  Proy: ").append(Proyecto)
-                      .append(" /  Camp: ").append(Campana);
-//                      .append(" / Prod: ").append(flc.Tipo)
-//                      .append(" - ").append(flc.Motivo)
-//                       .append(" - ").append(flc.Color)
-//                      .append(" - ").append(flc.Variedad)
-//                       .append(" - ").append(flc.Grupo)
-//                      .append(" - ").append(flc.Grado)
-//                      //.append(" - ").append(flc.Bunch)
-//                      .append("x").append(flc.labelBunch)
-//                      .append(" - ").append(flc.Mesa)
-//                      .append(" / Cant: : ").append(flc.Cantidad);
-       return description.toString();
-       }
 
 	
 	

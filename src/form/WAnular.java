@@ -1,10 +1,9 @@
 package form;
 
 
-import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 import java.util.logging.Level;
@@ -15,16 +14,10 @@ import org.adempiere.webui.component.Label;
 import org.adempiere.webui.component.ListModelTable;
 import org.adempiere.webui.component.ListboxFactory;
 import org.adempiere.webui.component.WListbox;
-import org.adempiere.webui.editor.WSearchEditor;
 import org.adempiere.webui.panel.ADForm;
 import org.adempiere.webui.panel.IFormController;
 import org.adempiere.webui.window.FDialog;
 import org.compiere.model.MInventory;
-import org.compiere.model.MOrder;
-import org.compiere.model.MOrderLine;
-import org.compiere.model.MProductPrice;
-import org.compiere.model.MStorageOnHand;
-import org.compiere.model.Query;
 import org.compiere.process.DocAction;
 import org.compiere.util.CLogger;
 import org.compiere.util.DB;
@@ -35,7 +28,6 @@ import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zul.Borderlayout;
 import org.zkoss.zul.Center;
-import org.zkoss.zul.Decimalbox;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Hbox;
 import org.zkoss.zul.Listheader;
@@ -59,12 +51,6 @@ private static final long serialVersionUID = -5779187375101512112L;
 	private Hbox northPanel = new Hbox();
 	private Div centerPanel = new Div();
 	private ListModelTable receiptLineTableModel;
-	private WSearchEditor productSearch;
-	private Decimalbox productQtyField;
-	private int p_M_Order_ID;
-	private Label errorLabel;
-
-
 	protected void initForm()
 	{
 		log.info("");
@@ -93,13 +79,15 @@ private static final long serialVersionUID = -5779187375101512112L;
 			centerPanel.setHflex("1");
 			South south = new South();
 			layout.appendChild(south);
-			errorLabel = new Label();
+			new Label();
 			south.appendChild(confirmPanel);
+			confirmPanel.getButton("Ok").setEnabled(false);
 		}
 		catch(Exception e)
 		{
 			log.log(Level.SEVERE, "init", e);
 		}
+		searchMInventory();
 	}	//	init
 
 	/**
@@ -121,15 +109,14 @@ private static final long serialVersionUID = -5779187375101512112L;
 		centerPanel.appendChild(receiptLineTable);
 		
 		confirmPanel.addActionListener(Events.ON_CLICK, this);
-		searchMInventory();
+	
 	}
 	
 	/**
 	 *	Dynamic Init
 	 */
 	
-	private void dynInit()
-	{
+	private void dynInit(){
 
 	}	
 
@@ -174,7 +161,13 @@ private static final long serialVersionUID = -5779187375101512112L;
 	}
 	
 	private void searchMInventory() {
-		List<MInventory> inventory = new Query(Env.getCtx(),MInventory.Table_Name, "movementdate = ? and docstatus = 'CO'", null).setParameters(CodaBarMain.date).list();
+
+		List<MInventory> inventory = getListMInventory();
+		if (inventory.size()==0)
+			confirmPanel.getButton("Ok").setEnabled(false);
+		else
+			confirmPanel.getButton("Ok").setEnabled(true);
+		
 		lineData = new Vector<Vector<Object>>();
 		 for (MInventory mInventory : inventory) {
 				Vector<Object> line = new Vector<Object>();
@@ -192,102 +185,44 @@ private static final long serialVersionUID = -5779187375101512112L;
 			confirmPanel.getButton("Ok").setEnabled(true);	
 	}
 
-	
-	public void procesar(){
-		for (Vector<Object> line : lineData) {
-			System.out.println(line.get(0)+" "+((KeyNamePair)line.get(1)).getKey());
+	public List<MInventory> getListMInventory(){
 		
-			
-		}	
-		
-	}
-	public void addOrderLine(String serial){
-		
-		MOrder order = new MOrder(Env.getCtx(), p_M_Order_ID, null);
-	
-				int productID = Integer.parseInt(productSearch.getValue().toString());
-				int M_AttributeSetInstance_ID = 0;
-				BigDecimal kilos =  productQtyField.getValue();
-				MProductPrice productPrice = verifyProductONPriceList( productID, order.getM_PriceList_ID()); // Verifica que el producto este en la lista de precio que se seleccionó en la orden
-				
-				if (productPrice!=null){
-					MOrderLine orderLine = new Query(Env.getCtx(), MOrderLine.Table_Name, "M_Product_ID = ? AND M_AttributeSetInstance_ID = ? AND C_Order_ID = ?", null)
-					.setParameters(productID,M_AttributeSetInstance_ID,p_M_Order_ID).first();
-					if (orderLine == null){
-						if (verifyInventory(order,productID,M_AttributeSetInstance_ID,kilos)){
-	
-							    MOrderLine ol = new MOrderLine(Env.getCtx(),0,order.get_TrxName());
-							    ol.setOrder(order);
-								ol.setM_Product_ID(productID);
-								ol.setQty(kilos);
-								ol.setC_Order_ID(p_M_Order_ID);
-								ol.setAD_Org_ID(order.getAD_Org_ID());
-								ol.save();
-
-	
-						}else{
-						errorLabel.setValue("No hay inventario disponible para este producto");
-						return;
-						}
-					}else errorLabel.setValue("Producto ya registrado en la orden actual");
-					
-				}else errorLabel.setValue("El producto no se encuentra en la lista de precio");
-			}
-
-	
-
-	private boolean verifyInventory(MOrder order , int productID, int M_AttributeSetInstance_ID,BigDecimal kilos){
-		
-		MStorageOnHand[] storages = MStorageOnHand.getWarehouse(Env.getCtx(), 
-				order.getM_Warehouse_ID(), productID, M_AttributeSetInstance_ID, 
-				null, true, false, 0, order.get_TrxName());
-			BigDecimal qty = Env.ZERO;
-			for (int i = 0; i < storages.length; i++)
-			{
-				if (storages[i].getM_AttributeSetInstance_ID() == M_AttributeSetInstance_ID)
-					qty = qty.add(storages[i].getQtyOnHand());
-			}
-			
-			if (kilos.compareTo(qty) > 0)
-			{
-				log.warning("Qty - Stock=" + qty + ", Ordered=" + kilos);
-				log.saveError("QtyInsufficient", "=" + qty); 
-				return false;
-			}else
-				return true;
-	}
-	private MProductPrice verifyProductONPriceList(int M_Product_ID, int M_PriceList_ID){
-		
-		String sql = "select plv.M_PriceList_ID as priceList from M_PriceList pl " +
-				" JOIN M_PriceList_Version plv ON plv.M_PriceList_ID = pl.M_PriceList_ID"+
-				" JOIN M_ProductPrice pp ON pp.M_PriceList_Version_ID = plv.M_PriceList_Version_ID"+
-				" where pp.M_Product_ID = ? AND pl.M_PriceList_ID = ?" ;
-		
+		List<MInventory> listInventory = new ArrayList<MInventory>(); ;
+		String andWhere = "";
+		if (CodaBarMain.variedadSelected!=null){
+			 andWhere = "and ml.M_Product_ID = '"+CodaBarMain.variedadSelected.get_ID()+"'";
+		}
+		//
+		String sql = "Select m.* from M_Inventory m JOIN M_InventoryLine ml ON ml.M_Inventory_ID = m.M_Inventory_ID"+
+				     " where C_DocType_ID=1000045 and movementdate = ? and docstatus = 'CO' "+andWhere;
 		PreparedStatement pstmt = null;
 		ResultSet rs = null;
 		try
 		{
 			pstmt = DB.prepareStatement (sql, null);
-			pstmt.setInt (1, M_Product_ID);
-			pstmt.setInt(2, M_PriceList_ID);
-			rs = pstmt.executeQuery();
-			if (rs.next())
-			{
-			   return new MProductPrice(Env.getCtx(), rs.getInt("priceList"), M_Product_ID, null);
+			pstmt.setTimestamp(1, CodaBarMain.date);
+			rs = pstmt.executeQuery ();
+			while (rs.next ()){
+				listInventory.add(new MInventory (Env.getCtx(), rs, null));
 			}
 		}
-		catch (SQLException e)
+		catch (Exception e)
 		{
+			log.log (Level.SEVERE, sql, e);
 		}
 		finally
 		{
 			DB.close(rs, pstmt);
 			rs = null; pstmt = null;
 		}
-
-		return null;
+		return listInventory;
 	}
-		
+	
+	public void procesar(){
+		for (Vector<Object> line : lineData) {
+			System.out.println(line.get(0)+" "+((KeyNamePair)line.get(1)).getKey());	
+		}		
+	}		
 
 	@Override
 	public ADForm getForm() {
